@@ -244,6 +244,44 @@ is_mozart:if( is_moz_chm ) then
               chem(its:ite,k,j,p_bc1) = chem(its:ite,k,j,p_bc1) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_bc)
             endif
           endif is_mozart
+          !
+          ! PartMC ML latent variables and ntot emissions (emiss_opt == 21)
+          ! TODO: Figure out proper conversion factors. Latent variables represent size distribution
+          !       and should likely be scaled by ntot (total number concentration). Currently using
+          !       conv_rho_aer for all variables - needs verification.
+          !
+          if( config_flags%emiss_opt == 21 ) then
+            if( p_e_ltnt_var1 >= param_first_scalar .and. p_ltnt_var1 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var1) = chem(its:ite,k,j,p_ltnt_var1) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var1)
+            endif
+            if( p_e_ltnt_var2 >= param_first_scalar .and. p_ltnt_var2 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var2) = chem(its:ite,k,j,p_ltnt_var2) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var2)
+            endif
+            if( p_e_ltnt_var3 >= param_first_scalar .and. p_ltnt_var3 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var3) = chem(its:ite,k,j,p_ltnt_var3) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var3)
+            endif
+            if( p_e_ltnt_var4 >= param_first_scalar .and. p_ltnt_var4 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var4) = chem(its:ite,k,j,p_ltnt_var4) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var4)
+            endif
+            if( p_e_ltnt_var5 >= param_first_scalar .and. p_ltnt_var5 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var5) = chem(its:ite,k,j,p_ltnt_var5) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var5)
+            endif
+            if( p_e_ltnt_var6 >= param_first_scalar .and. p_ltnt_var6 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var6) = chem(its:ite,k,j,p_ltnt_var6) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var6)
+            endif
+            if( p_e_ltnt_var7 >= param_first_scalar .and. p_ltnt_var7 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var7) = chem(its:ite,k,j,p_ltnt_var7) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var7)
+            endif
+            if( p_e_ltnt_var8 >= param_first_scalar .and. p_ltnt_var8 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var8) = chem(its:ite,k,j,p_ltnt_var8) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var8)
+            endif
+            if( p_e_ltnt_var9 >= param_first_scalar .and. p_ltnt_var9 >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ltnt_var9) = chem(its:ite,k,j,p_ltnt_var9) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var9)
+            endif
+            if( p_e_ntot >= param_first_scalar .and. p_ntot >= param_first_scalar ) then
+              chem(its:ite,k,j,p_ntot) = chem(its:ite,k,j,p_ntot) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ntot)
+            endif
+          endif
         END DO k_loop
       END DO                                                          
 
