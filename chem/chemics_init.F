@@ -262,6 +262,8 @@ call wrf_message("**************************************************************
      CASE(CB05_SORG_VBS_AQ_KPP)
         numgas_mam = numgas
         CALL wrf_debug(15,'calling CB05_SORG_VBS_AQ_KPP chemistry from chem_driver')
+     CASE(partmc_ml)
+        CALL wrf_debug(15,'calling partmc_ml chemistry')
    END SELECT chem_select
 
    if ( config_flags%dust_opt == 1 ) then
