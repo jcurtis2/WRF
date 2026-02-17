@@ -208,6 +208,8 @@
 ! LOCAL  VAR
      integer :: ii,jj,kk
 
+     real, allocatable :: chem_before_coag(:,:,:,:)
+     real, allocatable :: chem_after_coag(:,:,:,:)
 
 !-----------------------------------------------------------------
 
@@ -292,14 +294,22 @@
          SAPRC99_MOSAIC_8BIN_VBS2_AQ_KPP, SAPRC99_MOSAIC_8BIN_VBS2_KPP, & !BSINGH  Added "SAPRC99_MOSAIC_8BIN_VBS2_AQ_KPP" and "SAPRC99_MOSAIC_8BIN_VBS2_KPP"
          CBMZ_MOSAIC_DMS_4BIN, CBMZ_MOSAIC_DMS_8BIN, CBMZ_MOSAIC_DMS_4BIN_AQ, CBMZ_MOSAIC_DMS_8BIN_AQ)
        CALL wrf_debug(15,'aerosols_driver calling mosaic_aerchem_driver')
+       allocate( chem_before_coag(ims:ime, kms:kme, jms:jme, 1:num_chem) )
+       allocate( chem_after_coag (ims:ime, kms:kme, jms:jme, 1:num_chem) )
+       chem_before_coag = 0.0
+       chem_after_coag  = 0.0
        CALL mosaic_aerchem_driver(                                      &
             id, curr_secs, ktau, dtstep, ktauc, dtstepc, config_flags,  &
             t_phy, rho_phy, p_phy,                                      &
             moist, chem,vbs_nbin,                                       &
             ph_aer01, ph_aer02, ph_aer03, ph_aer04,                     &
+            chem_before_coag, chem_after_coag,                           &
             ids,ide, jds,jde, kds,kde,                                  &
             ims,ime, jms,jme, kms,kme,                                  &
             its,ite, jts,jte, kts,kte                                   )
+       ! chem_before_coag and chem_after_coag are now populated
+       ! TODO: use or write out chem_before_coag and chem_after_coag here
+       deallocate( chem_before_coag, chem_after_coag )
    CASE ( RACM_SOA_VBS_KPP, RACM_SOA_VBS_AQCHEM_KPP )
        CALL wrf_debug(15,'aerosols_driver calling soa_vbs_driver')
        do ii=its,ite

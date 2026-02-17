@@ -136,6 +136,7 @@
 		t_phy, rho_phy, p_phy,                            &
 		moist, chem, vbs_nbin,                            &
                ph_aer01, ph_aer02, ph_aer03, ph_aer04,           &
+		chem_before_coag, chem_after_coag,                &
 		ids,ide, jds,jde, kds,kde,                        &
 		ims,ime, jms,jme, kms,kme,                        &
 		its,ite, jts,jte, kts,kte                         )
@@ -241,6 +242,10 @@
                 dimension( ims:ime, kms:kme, jms:jme ) :: &
                 ph_aer01, ph_aer02, ph_aer03, ph_aer04
 
+	real, intent(inout),   &
+		dimension( ims:ime, kms:kme, jms:jme, 1:num_chem ) :: &
+		chem_before_coag, chem_after_coag
+
 	type(grid_config_rec_type), intent(in) :: config_flags
 !   config_flags - configuration and control parameters
 
@@ -256,7 +261,7 @@
 !	integer, parameter :: aercoag_onoff = 1
 !	integer, parameter :: aernewnuc_onoff = 1
 	integer :: aercoag_onoff = 1
-	integer :: aernewnuc_onoff = 1
+	integer :: aernewnuc_onoff = 1 
 	
 	real :: dtchem, dtcoag, dtnuc
 	real :: dum
@@ -484,10 +489,27 @@
 	if (aercoag_onoff > 0) then
 	    if (idiagaa_dum > 0) print 93010, 'calling mosaic_coag_1clm'
 	    dtcoag = dtchem
+
+	    ! map rsub to chem_before_coag for this column before coagulation
+	    call mapaer_tofrom_host( 1,                       &
+		ims,ime, jms,jme, kms,kme,                    &
+		its,ite, jts,jte, kts,kte,                    &
+		it,      jt,      ktmaps,ktmape,              &
+		num_moist, num_chem, moist, chem_before_coag, &
+		t_phy, p_phy, rho_phy                         )
+
 	    call mosaic_coag_1clm( istat,  &
 		it, jt, kclm_calcbgn, kclm_calcend,   &
 		idiagbb_dum, dtchem, dtcoag,   &
 		id, ktau, ktauc, its, ite, jts, jte, kts, kte )
+
+	    ! map rsub to chem_after_coag for this column after coagulation
+	    call mapaer_tofrom_host( 1,                       &
+		ims,ime, jms,jme, kms,kme,                    &
+		its,ite, jts,jte, kts,kte,                    &
+		it,      jt,      ktmaps,ktmape,              &
+		num_moist, num_chem, moist, chem_after_coag,  &
+		t_phy, p_phy, rho_phy                         )
 	end if
 
 
