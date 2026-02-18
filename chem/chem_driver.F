@@ -1577,7 +1577,7 @@ if ( cam_mam_aerosols ) &
         call aerosols_driver (grid%id,curr_secs,ktau,grid%dt,grid%ktauc,              &
              config_flags,dtstepc,grid%dx,                                            &
               rri,t_phy,moist,grid%aerwrf,p8w,t8w,                                    &
-              p_phy,chem,rho,dz8w, rh,                                                & 
+              p_phy,chem,rho,dz8w, rh,                                                &
               zmid,z_at_w,pbl_h,grid%cldfra,grid%cldfra_mp_all,grid%vbs_nbin,         &
               grid%gamn2o5,grid%cn2o5,grid%kn2o5,grid%yclno2,grid%snu,grid%sac,       &
               grid%h2oaj,grid%h2oai,grid%nu3,grid%ac3,grid%cor3,grid%asulf,           &
@@ -1587,6 +1587,7 @@ if ( cam_mam_aerosols ) &
               del_h2so4_gasprod,grid%dvmrdt_sv13d,grid%dvmrcwdt_sv13d,                &
               grid%is_CAMMGMP_used,                                                   &
               grid%ph_aer01, grid%ph_aer02, grid%ph_aer03, grid%ph_aer04,             &
+              grid%chem_bcg, grid%chem_acg,                                           &
               ids,ide, jds,jde, kds,kde,                                              &
               ims,ime, jms,jme, kms,kme,                                              &
               its,ite,jts,jte,kts,kte                                                 )
