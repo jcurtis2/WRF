@@ -17,6 +17,7 @@
                del_h2so4_gasprod,dvmrdt_sv13d,dvmrcwdt_sv13d,              &
                is_CAMMGMP_used,                                            &!BSINGH:01/31/2013: Added is_CAMMGMP_used for cam_mam_aerchem_driver
                ph_aer01, ph_aer02, ph_aer03, ph_aer04,                     &
+               chem_before_coag, chem_after_coag,                           &
                ids,ide, jds,jde, kds,kde,                                  &
                ims,ime, jms,jme, kms,kme,                                  &
                its,ite, jts,jte, kts,kte                                   )
@@ -205,9 +206,12 @@
    REAL, DIMENSION( ims:ime, kms:kme, jms:jme, gas_pcnst_pos ),          &
         INTENT(IN ) ::                                  dvmrdt_sv13d,dvmrcwdt_sv13d 
 
+   REAL, DIMENSION( ims:ime, kms:kme, jms:jme, num_chem ),          &
+         INTENT(INOUT ) ::                                              &
+         chem_before_coag, chem_after_coag
+
 ! LOCAL  VAR
      integer :: ii,jj,kk
-
 
 !-----------------------------------------------------------------
 
@@ -297,6 +301,7 @@
             t_phy, rho_phy, p_phy,                                      &
             moist, chem,vbs_nbin,                                       &
             ph_aer01, ph_aer02, ph_aer03, ph_aer04,                     &
+            chem_before_coag, chem_after_coag,                           &
             ids,ide, jds,jde, kds,kde,                                  &
             ims,ime, jms,jme, kms,kme,                                  &
             its,ite, jts,jte, kts,kte                                   )
