@@ -3,6 +3,7 @@
 #INCLUDES
 include registry.dimspec
 include registry.chem
+include registry.chem_coag_save.generated
 include registry.new3d_gca
 include registry.em_shared_collection
 
