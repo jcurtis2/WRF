@@ -199,6 +199,18 @@ state    real  e_so4i_num      i+jf     emis_ant     1         Z      i5      "E
 state    real  e_num_a3        i+jf     emis_ant     1         Z      i5      "E_NUM_A3"            "COARSE MODE NUMBER"      "particle/m2/s"
 state    real  e_dms           i+jf     emis_ant     1         Z      i5r     "E_DMS"               "EMISSIONS"               "mol km^-2 hr^-1"
 
+# PartMC ML latent variables and ntot emissions
+state    real  e_ltnt_var1     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR1"         "EMISSIONS LATENT VAR 1"  "ug/m3 m/s"
+state    real  e_ltnt_var2     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR2"         "EMISSIONS LATENT VAR 2"  "ug/m3 m/s"
+state    real  e_ltnt_var3     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR3"         "EMISSIONS LATENT VAR 3"  "ug/m3 m/s"
+state    real  e_ltnt_var4     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR4"         "EMISSIONS LATENT VAR 4"  "ug/m3 m/s"
+state    real  e_ltnt_var5     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR5"         "EMISSIONS LATENT VAR 5"  "ug/m3 m/s"
+state    real  e_ltnt_var6     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR6"         "EMISSIONS LATENT VAR 6"  "ug/m3 m/s"
+state    real  e_ltnt_var7     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR7"         "EMISSIONS LATENT VAR 7"  "ug/m3 m/s"
+state    real  e_ltnt_var8     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR8"         "EMISSIONS LATENT VAR 8"  "ug/m3 m/s"
+state    real  e_ltnt_var9     i+jf     emis_ant     1         Z      i5      "E_LTNT_VAR9"         "EMISSIONS LATENT VAR 9"  "ug/m3 m/s"
+state    real  e_ntot          i+jf     emis_ant     1         Z      i5      "E_NTOT"              "EMISSIONS TOTAL NUMBER"  "ug/m3 m/s"
+
 # soiltexturef is texture category fraction for each grid cell
 state    real  ust_t         ij       misc         1         -      i012rh "UST_T"               "Threshold Friction Velocity"          "m s-1"
 state    real  rough_cor     ij       misc         1         -       rh      "Rough_cor"     "roughness elements correction"        ""
@@ -310,7 +322,6 @@ state    real  e_lim          i+jf     emis_ant     1         Z      i5     "E_L
 state    real  e_ter          i+jf     emis_ant     1         Z      i5     "E_TER"                "EMISSIONS Terpinene"           "mol km^-2 hr^-1"
 state    real  e_oci          i+jf     emis_ant     1         Z      i5     "E_OCI"                "EMISSIONS Ocimene"             "mol km^-2 hr^-1"
 state    real  e_hum          i+jf     emis_ant     1         Z      i5     "E_HUM"                "EMISSIONS Humulene"            "mol km^-2 hr^-1"
-
 
 # dust and seas emission arrays
 state   real     -          i{dust}jf      emis_dust      -        -        -         -                    "Dust Emissions"         ""
@@ -3757,6 +3768,18 @@ state   real    meo2     ikjftb   chem        1         -     i0{12}rhusdf=(bdy_
 state   real    meoh     ikjftb   chem        1         -     i0{12}rhusdf=(bdy_interp:dt)         "meoh"  ""  ""
 state   real    meo2no2  ikjftb   chem        1         -     i0{12}rhusdf=(bdy_interp:dt)         "meo2no2"  ""  ""
 
+# PartMC ML variables
+state   real   ltnt_var1   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var1"     "Latent variable 1"           "ug/kg-dryair"
+state   real   ltnt_var2   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var2"     "Latent variable 2"           "ug/kg-dryair"
+state   real   ltnt_var3   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var3"     "Latent variable 3"           "ug/kg-dryair"
+state   real   ltnt_var4   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var4"     "Latent variable 4"           "ug/kg-dryair"
+state   real   ltnt_var5   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var5"     "Latent variable 5"           "ug/kg-dryair"
+state   real   ltnt_var6   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var6"     "Latent variable 6"           "ug/kg-dryair"
+state   real   ltnt_var7   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var7"     "Latent variable 7"           "ug/kg-dryair"
+state   real   ltnt_var8   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var8"     "Latent variable 8"           "ug/kg-dryair"
+state   real   ltnt_var9   ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ltnt_var9"     "Latent variable 9"           "ug/kg-dryair"
+state   real   ntot        ikjftb   chem        1         -   i0{12}rhusdf=(bdy_interp:dt)  "ntot"          "Total number"                "ug/kg-dryair"
+
 #End MATCH-MPI MAINZ global chemistry
 
 state integer  STEPBIOE          -        misc        1         -      r      "STEPBIOE"             "NUMBER OF FUNDAMENTAL TIMESTEPS BETWEEN BIOGENIC EMIS CALLS"             "NA"
@@ -4047,7 +4070,8 @@ package   crimech_kpp     chem_opt==600                  -             chem:dms,
 # CRIMECH gas phase and original aqueous MOSAIC
 package   cri_mosaic_8bin_aq_kpp  chem_opt==601          -             chem:dms,dmso,dmso2,ch3sch2oo,ch3s,ch3so,ch3so2,ch3so3,msa,msia,nh3,hcl,so2,hso3,no2,o3,hno3,h2o2,ch3cho,hcho,ch3ooh,c2h5ooh,paa,hcooh,n2o5,no3,pan,c3h8,nc4h10,c2h6,co,c2h4,toluene,oxyl,aco3,hono,hno4,ket,c5h8,ho,ho2,so3,no,benzene,npropol,c2h2,c3h6,tbut2ene,c2h5cho,ch3co2h,mek,ch3oh,c2h5oh,ipropol,ch3no3,c2h5no3,hoc2h4no3,prooh,hoc2h4ooh,carb14,carb17,rn10no3,rn13no3,rn19no3,rn9no3,rn12no3,rn15no3,rn18no3,rn16no3,rn10ooh,rn13ooh,rn16ooh,rn19ooh,rn8ooh,rn11ooh,rn14ooh,rn17ooh,rn9ooh,rn12ooh,rn15ooh,rn18ooh,nrn6ooh,nrn9ooh,nrn12ooh,apinene,bpinene,carb7,carb10,carb13,carb16,carb3,carb6,carb9,carb12,carb15,c2h5co3h,c2h5co3,ppn,hoch2cho,hoch2co3,hoch2co3h,phan,ccarb12,ch3cl,ch2cl2,chcl3,ch3ccl3,cdicleth,tdicleth,tricleth,tce,ucarb12,ucarb10,ru14no3,ru14ooh,ru12ooh,ru10ooh,mpan,ru12pan,nucarb12,nru14ooh,nru12ooh,noa,ra13no3,ra13ooh,udcarb8,aroh14,raroh14,arnoh14,ra16no3,ra16ooh,udcarb11,aroh17,raroh17,arnoh17,udcarb14,ra19co2,ra19no3,ra19ooh,rtn28no3,rtn28ooh,tncarb26,rtn26ooh,nrtn28ooh,rtn26pan,rtn25ooh,rtn24ooh,rtn23ooh,rtn14ooh,rtn10ooh,tncarb10,rtn25no3,tncarb15,rcooh25,rtx28no3,rtx28ooh,txcarb24,rtx24no3,rtx24ooh,txcarb22,rtx22no3,rtx22ooh,nrtx28ooh,carb11a,anhy,ch3o2no2,ch4,sulf,rtn23no3,tncarb12,tncarb11,tm123b,tm124b,tm135b,oethtol,methtol,pethtol,ra22no3,ra22ooh,dime35eb,ra25no3,udcarb17,ra25ooh,clno2,ch3oo,c2h5o2,hoch2ch2o2,ic3h7o2,rn10o2,rn13o2,rn16o2,rn19o2,rn9o2,rn12o2,rn15o2,rn18o2,nrn6o2,nrn9o2,nrn12o2,rn11o2,rn14o2,rn8o2,rn17o2,rn13ao2,rn16ao2,rn15ao2,rn18ao2,ru10o2,nru14o2,nru12o2,ra13o2,nrtx28o2,rtx24o2,rtx28o2,rtn25o2,rtn24o2,rtn23o2,rtn14o2,rtn10o2,nrtn28o2,rtn26o2,rtn28o2,ra19ao2,ru14o2,ru12o2,ra16o2,rtx22o2,ra22ao2,ra22bo2,ra25o2,ic3h7no3,so4_a01,no3_a01,cl_a01,nh4_a01,na_a01,oin_a01,oc_a01,bc_a01,hysw_a01,water_a01,num_a01,so4_a02,no3_a02,cl_a02,nh4_a02,na_a02,oin_a02,oc_a02,bc_a02,hysw_a02,water_a02,num_a02,so4_a03,no3_a03,cl_a03,nh4_a03,na_a03,oin_a03,oc_a03,bc_a03,hysw_a03,water_a03,num_a03,so4_a04,no3_a04,cl_a04,nh4_a04,na_a04,oin_a04,oc_a04,bc_a04,hysw_a04,water_a04,num_a04,so4_a05,no3_a05,cl_a05,nh4_a05,na_a05,oin_a05,oc_a05,bc_a05,hysw_a05,water_a05,num_a05,so4_a06,no3_a06,cl_a06,nh4_a06,na_a06,oin_a06,oc_a06,bc_a06,hysw_a06,water_a06,num_a06,so4_a07,no3_a07,cl_a07,nh4_a07,na_a07,oin_a07,oc_a07,bc_a07,hysw_a07,water_a07,num_a07,so4_a08,no3_a08,cl_a08,nh4_a08,na_a08,oin_a08,oc_a08,bc_a08,hysw_a08,water_a08,num_a08,so4_cw01,no3_cw01,cl_cw01,nh4_cw01,na_cw01,oin_cw01,oc_cw01,bc_cw01,num_cw01,so4_cw02,no3_cw02,cl_cw02,nh4_cw02,na_cw02,oin_cw02,oc_cw02,bc_cw02,num_cw02,so4_cw03,no3_cw03,cl_cw03,nh4_cw03,na_cw03,oin_cw03,oc_cw03,bc_cw03,num_cw03,so4_cw04,no3_cw04,cl_cw04,nh4_cw04,na_cw04,oin_cw04,oc_cw04,bc_cw04,num_cw04,so4_cw05,no3_cw05,cl_cw05,nh4_cw05,na_cw05,oin_cw05,oc_cw05,bc_cw05,num_cw05,so4_cw06,no3_cw06,cl_cw06,nh4_cw06,na_cw06,oin_cw06,oc_cw06,bc_cw06,num_cw06,so4_cw07,no3_cw07,cl_cw07,nh4_cw07,na_cw07,oin_cw07,oc_cw07,bc_cw07,num_cw07,so4_cw08,no3_cw08,cl_cw08,nh4_cw08,na_cw08,oin_cw08,oc_cw08,bc_cw08,num_cw08
 package   cri_mosaic_4bin_aq_kpp  chem_opt==611          -             chem:dms,dmso,dmso2,ch3sch2oo,ch3s,ch3so,ch3so2,ch3so3,msa,msia,nh3,hcl,so2,hso3,no2,o3,hno3,h2o2,ch3cho,hcho,ch3ooh,c2h5ooh,paa,hcooh,n2o5,no3,pan,c3h8,nc4h10,c2h6,co,c2h4,toluene,oxyl,aco3,hono,hno4,ket,c5h8,ho,ho2,so3,no,benzene,npropol,c2h2,c3h6,tbut2ene,c2h5cho,ch3co2h,mek,ch3oh,c2h5oh,ipropol,ch3no3,c2h5no3,hoc2h4no3,prooh,hoc2h4ooh,carb14,carb17,rn10no3,rn13no3,rn19no3,rn9no3,rn12no3,rn15no3,rn18no3,rn16no3,rn10ooh,rn13ooh,rn16ooh,rn19ooh,rn8ooh,rn11ooh,rn14ooh,rn17ooh,rn9ooh,rn12ooh,rn15ooh,rn18ooh,nrn6ooh,nrn9ooh,nrn12ooh,apinene,bpinene,carb7,carb10,carb13,carb16,carb3,carb6,carb9,carb12,carb15,c2h5co3h,c2h5co3,ppn,hoch2cho,hoch2co3,hoch2co3h,phan,ccarb12,ch3cl,ch2cl2,chcl3,ch3ccl3,cdicleth,tdicleth,tricleth,tce,ucarb12,ucarb10,ru14no3,ru14ooh,ru12ooh,ru10ooh,mpan,ru12pan,nucarb12,nru14ooh,nru12ooh,noa,ra13no3,ra13ooh,udcarb8,aroh14,raroh14,arnoh14,ra16no3,ra16ooh,udcarb11,aroh17,raroh17,arnoh17,udcarb14,ra19co2,ra19no3,ra19ooh,rtn28no3,rtn28ooh,tncarb26,rtn26ooh,nrtn28ooh,rtn26pan,rtn25ooh,rtn24ooh,rtn23ooh,rtn14ooh,rtn10ooh,tncarb10,rtn25no3,tncarb15,rcooh25,rtx28no3,rtx28ooh,txcarb24,rtx24no3,rtx24ooh,txcarb22,rtx22no3,rtx22ooh,nrtx28ooh,carb11a,anhy,ch3o2no2,ch4,sulf,rtn23no3,tncarb12,tncarb11,tm123b,tm124b,tm135b,oethtol,methtol,pethtol,ra22no3,ra22ooh,dime35eb,ra25no3,udcarb17,ra25ooh,clno2,ch3oo,c2h5o2,hoch2ch2o2,ic3h7o2,rn10o2,rn13o2,rn16o2,rn19o2,rn9o2,rn12o2,rn15o2,rn18o2,nrn6o2,nrn9o2,nrn12o2,rn11o2,rn14o2,rn8o2,rn17o2,rn13ao2,rn16ao2,rn15ao2,rn18ao2,ru10o2,nru14o2,nru12o2,ra13o2,nrtx28o2,rtx24o2,rtx28o2,rtn25o2,rtn24o2,rtn23o2,rtn14o2,rtn10o2,nrtn28o2,rtn26o2,rtn28o2,ra19ao2,ru14o2,ru12o2,ra16o2,rtx22o2,ra22ao2,ra22bo2,ra25o2,ic3h7no3,so4_a01,no3_a01,cl_a01,nh4_a01,na_a01,oin_a01,oc_a01,bc_a01,hysw_a01,water_a01,num_a01,so4_a02,no3_a02,cl_a02,nh4_a02,na_a02,oin_a02,oc_a02,bc_a02,hysw_a02,water_a02,num_a02,so4_a03,no3_a03,cl_a03,nh4_a03,na_a03,oin_a03,oc_a03,bc_a03,hysw_a03,water_a03,num_a03,so4_a04,no3_a04,cl_a04,nh4_a04,na_a04,oin_a04,oc_a04,bc_a04,hysw_a04,water_a04,num_a04,so4_cw01,no3_cw01,cl_cw01,nh4_cw01,na_cw01,oin_cw01,oc_cw01,bc_cw01,num_cw01,so4_cw02,no3_cw02,cl_cw02,nh4_cw02,na_cw02,oin_cw02,oc_cw02,bc_cw02,num_cw02,so4_cw03,no3_cw03,cl_cw03,nh4_cw03,na_cw03,oin_cw03,oc_cw03,bc_cw03,num_cw03,so4_cw04,no3_cw04,cl_cw04,nh4_cw04,na_cw04,oin_cw04,oc_cw04,bc_cw04,num_cw04
-
+# PartMC ML latent variables
+package partmc_ml chem_opt==900 - chem:ltnt_var1,ltnt_var2,ltnt_var3,ltnt_var4,ltnt_var5,ltnt_var6,ltnt_var7,ltnt_var8,ltnt_var9,ntot
 
 #emission package definitions
 #
@@ -4073,6 +4097,7 @@ package   eco2            emiss_opt==16                  -             emis_ant:
 package   eghg            emiss_opt==17                  -             emis_ant:e_co2,e_co2tst,e_co,e_cotst,e_ch4,e_ch4tst
 package   ecrimech        emiss_opt==19                   -             emis_ant:e_co,e_no,e_no2,e_so2,e_nh3,e_c2h6,e_c3h8,e_c2h4,e_c3h6,e_c5h8,e_tm123b,e_tm124b,e_tm135b,e_oethtol,e_methtol,e_pethtol,e_dime35eb,e_hcho,e_ch3cho,e_c2h5cho,e_ket,e_mek,e_ch3oh,e_c2h5oh,e_c2h2,e_benzene,e_nc4h10,e_toluene,e_oxyl,e_tbut2ene,e_ch3co2h
 package   ecrimechtno     emiss_opt==20                  -             emis_ant:e_co,e_no,e_no2,e_so2,e_nh3,e_c2h6,e_c3h8,e_c2h4,e_c3h6,e_c5h8,e_tm123b,e_tm124b,e_tm135b,e_oethtol,e_methtol,e_pethtol,e_dime35eb,e_hcho,e_ch3cho,e_c2h5cho,e_ket,e_mek,e_ch3oh,e_c2h5oh,e_c2h2,e_benzene,e_nc4h10,e_toluene,e_oxyl,e_tbut2ene,e_ch3co2h,e_bc_1,e_ec_1_25,e_ec_25_10,e_oc_dom,e_oc_tra,e_oc_25_10,e_pm25,e_oin_25,e_oin_10
+package   epartml         emiss_opt==21                  -             emis_ant:e_ltnt_var1,e_ltnt_var2,e_ltnt_var3,e_ltnt_var4,e_ltnt_var5,e_ltnt_var6,e_ltnt_var7,e_ltnt_var8,e_ltnt_var9,e_ntot
 #
 package   vash    emiss_opt_vol==1                   -             emis_vol:e_vash1,e_vash2,e_vash3,e_vash4,e_vash5,e_vash6,e_vash7,e_vash8,e_vash9,e_vash10
 package   vashso2 emiss_opt_vol==2                   -             emis_vol:e_vash1,e_vash2,e_vash3,e_vash4,e_vash5,e_vash6,e_vash7,e_vash8,e_vash9,e_vash10,e_vso2
