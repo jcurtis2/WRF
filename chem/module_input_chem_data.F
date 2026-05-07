@@ -2354,7 +2354,8 @@ END SUBROUTINE bdy_chem_value_ghg
 
       !print*,'before',chem,chem_bt ,dt, ic
 
-      chem=max(epsilc,chem_b + chem_bt * dt)
+!      chem=max(epsilc,chem_b + chem_bt * dt)
+      chem=chem_b + chem_bt * dt !max(epsilc,chem_b + chem_bt * dt)
       !print*,'after',chem
       RETURN
   END SUBROUTINE bdy_chem_value_gcm

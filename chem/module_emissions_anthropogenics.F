@@ -251,6 +251,7 @@ is_mozart:if( is_moz_chm ) then
           !       conv_rho_aer for all variables - needs verification.
           !
           if( config_flags%emiss_opt == 21 ) then
+            print*, 'Adding PartMC ML emissions for latent variables and ntot'
             if( p_e_ltnt_var1 >= param_first_scalar .and. p_ltnt_var1 >= param_first_scalar ) then
               chem(its:ite,k,j,p_ltnt_var1) = chem(its:ite,k,j,p_ltnt_var1) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var1)
             endif
@@ -279,6 +280,10 @@ is_mozart:if( is_moz_chm ) then
               chem(its:ite,k,j,p_ltnt_var9) = chem(its:ite,k,j,p_ltnt_var9) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var9)
             endif
             if( p_e_ntot >= param_first_scalar .and. p_ntot >= param_first_scalar ) then
+              if (maxval(emis_ant(its:ite,1,j,p_e_ntot)) > 0.0) then
+              print*, 'adding number', p_ntot, p_e_ntot, &
+                 maxval(emis_ant(its:ite,1,j,p_e_ntot))
+              end if
               chem(its:ite,k,j,p_ntot) = chem(its:ite,k,j,p_ntot) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ntot)
             endif
           endif

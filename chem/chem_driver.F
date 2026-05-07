@@ -648,6 +648,9 @@
        CALL wrf_debug(15,'Dust only mode: only doing emissions, settling, and subgrid transport chem_driver')
     CASE (CO2_TRACER,GHG_TRACER)
       CALL wrf_debug(15,'Greenhouse gas mode: fluxes and transport of GHG')
+    CASE (partmc_ml)
+       ! Must allow for negative numbers
+       chem_minval = -HUGE(chem_minval)
     CASE DEFAULT
        if(config_flags%tracer_opt > 0 )then
        CALL wrf_debug(15,'only doing tracer transport in chem_driver')
