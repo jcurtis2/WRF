@@ -1096,8 +1096,8 @@ END SUBROUTINE rk_addtend_dry
 SUBROUTINE rk_scalar_tend ( scs, sce, config_flags,          &
                             tenddec,                         &
                             rk_step, dt_step,                &
-                            ru, rv, ww, wwE, wwI,            &  
-                            u_old, v_old,                    &  
+                            ru, rv, ww, wwE, wwI,            &
+                            u_old, v_old,                    &
                             mut, mub, mu_old,                &
                             c1h, c2h, c1f, c2f, alt,         &
                             scalar_old, scalar,              &
@@ -1115,7 +1115,10 @@ SUBROUTINE rk_scalar_tend ( scs, sce, config_flags,          &
                             mix2_off, mix6_off,              &
                             ids, ide, jds, jde, kds, kde,    &
                             ims, ime, jms, jme, kms, kme,    &
-                            its, ite, jts, jte, kts, kte    )
+                            its, ite, jts, jte, kts, kte,    &
+                            flux_out_east, flux_out_west,    &
+                            flux_out_north, flux_out_south,  &
+                            flux_out_top, flux_out_bottom    )
 
    IMPLICIT NONE
 
@@ -1183,8 +1186,13 @@ SUBROUTINE rk_scalar_tend ( scs, sce, config_flags,          &
 
    REAL,    INTENT(IN   ) :: dt_step    ! This is the local dt for each RK sub-step
 
-   INTEGER, INTENT(IN   ) :: adv_opt          
+   INTEGER, INTENT(IN   ) :: adv_opt
    LOGICAL, INTENT(IN   ) :: mix2_off, mix6_off
+
+   REAL, DIMENSION(ims:ime, kms:kme, jms:jme), INTENT(INOUT), OPTIONAL :: &
+                                  flux_out_east, flux_out_west,   &
+                                  flux_out_north, flux_out_south, &
+                                  flux_out_top, flux_out_bottom
 
    ! Local data
   
@@ -1281,6 +1289,11 @@ SUBROUTINE rk_scalar_tend ( scs, sce, config_flags,          &
 
       ELSE IF( (rk_step == rk_order) .and. (adv_opt == MONOTONIC) ) THEN
 
+        WRITE(*,*) 'FLUX DEBUG: calling advect_scalar_mono, im=', im, &
+            ' adv_opt=', adv_opt, &
+            ' rk_step=', rk_step, ' rk_order=', rk_order, &
+            ' flux_out_east present=', PRESENT(flux_out_east)
+
         CALL advect_scalar_mono       ( scalar(ims,kms,jms,im),             &
                                         scalar_old(ims,kms,jms,im),         &
                                         advect_tend(ims,kms,jms),           &
@@ -1294,7 +1307,16 @@ SUBROUTINE rk_scalar_tend ( scs, sce, config_flags,          &
                                         rdx, rdy, rdnw, dt_step,            &
                                         ids, ide, jds, jde, kds, kde,       &
                                         ims, ime, jms, jme, kms, kme,       &
-                                        its, ite, jts, jte, kts, kte     )
+                                        its, ite, jts, jte, kts, kte,       &
+                                        flux_out_east, flux_out_west,       &
+                                        flux_out_north, flux_out_south,     &
+                                        flux_out_top, flux_out_bottom       )
+
+        IF (PRESENT(flux_out_east)) THEN
+          WRITE(*,*) 'FLUX DEBUG: after advect_scalar_mono, flux_out_east min/max=', &
+              MINVAL(flux_out_east(its:min(ite,ide-1),kds:kde-1,jts:min(jte,jde-1))), &
+              MAXVAL(flux_out_east(its:min(ite,ide-1),kds:kde-1,jts:min(jte,jde-1)))
+        ENDIF
 
       ELSE IF( (rk_step == rk_order) .and. (adv_opt == WENO_SCALAR) ) THEN
 

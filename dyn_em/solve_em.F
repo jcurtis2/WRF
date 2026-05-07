@@ -46,7 +46,8 @@ SUBROUTINE solve_em ( grid , config_flags  &
                  ,period_bdy_em_tracer_sub,period_em_da_sub,period_em_hydro_uv_sub         &
                  ,period_em_f_sub,period_em_g_sub                                          &
                  ,halo_em_f_1_sub,halo_em_init_4_sub,halo_em_thetam_sub,period_em_thetam_sub &
-                 ,halo_em_d_pv_sub,halo_firebrand_spotting_5_sub
+                 ,halo_em_d_pv_sub,halo_firebrand_spotting_5_sub &
+                 ,halo_em_flux_out_sub
 #endif
    USE module_utility
 ! Mediation layer modules
@@ -161,6 +162,16 @@ SUBROUTINE solve_em ( grid , config_flags  &
 #if (WRF_CHEM == 1)
    ! Index cross-referencing array for tendency accumulation
    INTEGER, DIMENSION( num_chem ) :: adv_ct_indices
+   INTEGER :: ic2
+   REAL    :: total_frac_out, muold_val, munew_val, mu_nb
+   REAL(8) :: chem_dp, mu_nb_dp, muold_dp, munew_dp, ratio_dp, ratio_nb
+   REAL, DIMENSION(grid%sm31:grid%em31,grid%sm32:grid%em32,grid%sm33:grid%em33) :: &
+                                                   tmp_flux_east,  &
+                                                   tmp_flux_west,  &
+                                                   tmp_flux_north, &
+                                                   tmp_flux_south, &
+                                                   tmp_flux_top,   &
+                                                   tmp_flux_bottom
 #endif
 
 ! storage for tendencies and decoupled state (generated from Registry)
@@ -576,6 +587,14 @@ SUBROUTINE solve_em ( grid , config_flags  &
 !**********************************************************************
 
    Runge_Kutta_loop:  DO rk_step = 1, rk_order
+
+     IF ( rk_step == 1 .AND. num_3d_c > PARAM_FIRST_SCALAR ) THEN
+       WRITE(*,*) 'LATENT DEBUG: entering RK loop, chem(:,:,:,PARAM_FIRST_SCALAR) sum=', &
+           SUM(chem(ims:ime,kms:kme,jms:jme,PARAM_FIRST_SCALAR))
+       WRITE(*,*) 'LATENT DEBUG: entering RK loop, chem(:,:,:,PARAM_FIRST_SCALAR) min/max=', &
+           MINVAL(chem(ims:ime,kms:kme,jms:jme,PARAM_FIRST_SCALAR)), &
+           MAXVAL(chem(ims:ime,kms:kme,jms:jme,PARAM_FIRST_SCALAR))
+     ENDIF
 
    !  Set the step size and number of small timesteps for
    !  each part of the timestep
@@ -1984,7 +2003,7 @@ BENCH_END(small_step_finish_tim)
          !$OMP PRIVATE ( ij )
          DO ij = 1 , grid%num_tiles
            CALL wrf_debug ( 200 , ' call rk_update_scalar_pd' )
-           DO im = PARAM_FIRST_SCALAR, num_3d_c
+           DO im = num_3d_c, num_3d_c
              CALL rk_update_scalar_pd( im, im,                                  &
                                        chem_old(ims,kms,jms,im),                &
                                        chem_tend(ims,kms,jms,im),               &
@@ -2465,7 +2484,15 @@ BENCH_END(tke_adv_tim)
 BENCH_START(chem_adv_tim)
        chem_scalar_advance: IF (num_3d_c >= PARAM_FIRST_SCALAR)  THEN
 
-         chem_variable_loop: DO ic = PARAM_FIRST_SCALAR, num_3d_c
+         ! Initialize local flux arrays to zero before they are filled by advect_scalar_mono
+         tmp_flux_east   = 0.0
+         tmp_flux_west   = 0.0
+         tmp_flux_north  = 0.0
+         tmp_flux_south  = 0.0
+         tmp_flux_top    = 0.0
+         tmp_flux_bottom = 0.0
+
+         chem_variable_loop: DO ic = num_3d_c, num_3d_c
 
            !$OMP PARALLEL DO   &
            !$OMP PRIVATE ( ij, tenddec )
@@ -2491,7 +2518,7 @@ BENCH_START(chem_adv_tim)
                               grid%rdx, grid%rdy, grid%rdn, grid%rdnw,           &
                               grid%khdif, grid%kvdif, grid%xkhh,                 &
                               grid%diff_6th_opt, grid%diff_6th_factor,           &
-                              config_flags%chem_adv_opt,                         &
+                              config_flags%chem_adv_opt, &
                               grid%phb, grid%ph_2,                               &
                               config_flags%chem_mix2_off,                        &
                               config_flags%chem_mix6_off,                        &
@@ -2499,7 +2526,10 @@ BENCH_START(chem_adv_tim)
                               ims, ime, jms, jme, kms, kme,                      &
                               grid%i_start(ij), grid%i_end(ij),                  &
                               grid%j_start(ij), grid%j_end(ij),                  &
-                              k_start    , k_end                                )
+                              k_start    , k_end,                                &
+                              tmp_flux_east, tmp_flux_west,                       &
+                              tmp_flux_north, tmp_flux_south,                     &
+                              tmp_flux_top, tmp_flux_bottom                       )
 !
 ! Currently, chemistry species with specified boundaries (i.e. the mother
 ! domain)  are being over written by flow_dep_bdy_chem. So, relax_bdy and
@@ -2541,6 +2571,18 @@ BENCH_START(chem_adv_tim)
 
          ENDDO chem_tile_loop_1
          !$OMP END PARALLEL DO
+
+         ! Copy local flux arrays to grid state (avoids Fortran optional arg copy-back issues)
+         grid%flux_out_east   = tmp_flux_east
+         grid%flux_out_west   = tmp_flux_west
+         grid%flux_out_north  = tmp_flux_north
+         grid%flux_out_south  = tmp_flux_south
+         grid%flux_out_top    = tmp_flux_top
+         grid%flux_out_bottom = tmp_flux_bottom
+
+         WRITE(*,*) 'FLUX DEBUG solve_em: after tile_loop_1, flux_out_east min/max=', &
+             MINVAL(grid%flux_out_east(ims:ime,kms:kme,jms:jme)), &
+             MAXVAL(grid%flux_out_east(ims:ime,kms:kme,jms:jme))
 
 if ( config_flags%do_pvozone ) then
 #ifdef DM_PARALLEL
@@ -2621,6 +2663,209 @@ end if
          !$OMP END PARALLEL DO
 
        ENDDO chem_variable_loop
+
+!  Update other latent variables using flux fractions from num_3d_c.
+!  flux_out_* are fractional (positive = outflow from cell).
+!  Only valid on the final RK step when advect_scalar_mono was called.
+       IF ( rk_step == rk_order .AND. num_3d_c > PARAM_FIRST_SCALAR ) THEN
+
+!  Halo exchange for flux_out arrays before neighbor access
+#ifdef DM_PARALLEL
+#  include "HALO_EM_FLUX_OUT.inc"
+#endif
+
+         ! Halo exchange for latent chem species before neighbor access
+         ! (these species skip standard advection so their halos are stale)
+#ifdef DM_PARALLEL
+#  include "HALO_EM_CHEM_E_3.inc"
+#endif
+
+         ! Copy chem to chem_old for latent variables (not done by rk_update_scalar
+         ! since we skip standard advection for these species).
+         ! Do NOT overwrite num_3d_c (mixing ratio) — chem_old(:,:,:,num_3d_c)
+         ! must keep its pre-advection values to match field_old used in
+         ! advect_scalar_mono when computing flux_out.
+         DO ic2 = PARAM_FIRST_SCALAR, num_3d_c - 1
+           DO j = jms, MIN(jme, jde-1)
+           DO k = kms, MIN(kme, kde-1)
+           DO i = ims, MIN(ime, ide-1)
+             chem_old(i,k,j,ic2) = chem(i,k,j,ic2)
+           ENDDO
+           ENDDO
+           ENDDO
+         ENDDO
+
+         ! Debug: check flux values
+         WRITE(*,*) 'LATENT DEBUG: dt_rk=', dt_rk
+         WRITE(*,*) 'LATENT DEBUG: flux_out_east min/max=',  &
+             MINVAL(grid%flux_out_east(ims:ime,kms:kme,jms:jme)),  &
+             MAXVAL(grid%flux_out_east(ims:ime,kms:kme,jms:jme))
+         WRITE(*,*) 'LATENT DEBUG: flux_out_west min/max=',  &
+             MINVAL(grid%flux_out_west(ims:ime,kms:kme,jms:jme)),  &
+             MAXVAL(grid%flux_out_west(ims:ime,kms:kme,jms:jme))
+         WRITE(*,*) 'LATENT DEBUG: flux_out_north min/max=', &
+             MINVAL(grid%flux_out_north(ims:ime,kms:kme,jms:jme)), &
+             MAXVAL(grid%flux_out_north(ims:ime,kms:kme,jms:jme))
+         WRITE(*,*) 'LATENT DEBUG: flux_out_south min/max=', &
+             MINVAL(grid%flux_out_south(ims:ime,kms:kme,jms:jme)), &
+             MAXVAL(grid%flux_out_south(ims:ime,kms:kme,jms:jme))
+         WRITE(*,*) 'LATENT DEBUG: flux_out_top min/max=',   &
+             MINVAL(grid%flux_out_top(ims:ime,kms:kme,jms:jme)),   &
+             MAXVAL(grid%flux_out_top(ims:ime,kms:kme,jms:jme))
+         WRITE(*,*) 'LATENT DEBUG: flux_out_bottom min/max=',&
+             MINVAL(grid%flux_out_bottom(ims:ime,kms:kme,jms:jme)),&
+             MAXVAL(grid%flux_out_bottom(ims:ime,kms:kme,jms:jme))
+
+         ! Debug: check chem before update
+         WRITE(*,*) 'LATENT DEBUG: PARAM_FIRST_SCALAR=', PARAM_FIRST_SCALAR, &
+             ' num_3d_c=', num_3d_c
+         WRITE(*,*) 'LATENT DEBUG: chem(:,:,:,PARAM_FIRST_SCALAR) sum before=', &
+             SUM(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR))
+         WRITE(*,*) 'LATENT DEBUG: chem(:,:,:,PARAM_FIRST_SCALAR) min/max before=', &
+             MINVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR)), &
+             MAXVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR))
+
+         ! Boundary-safe loop indices:
+         ! i: skip first and last to allow i-1, i+1 access
+         ! j: skip first and last to allow j-1, j+1 access
+         ! k: full range k_start to k_end, guard vertical neighbors
+           DO ic2 = PARAM_FIRST_SCALAR, num_3d_c - 1
+             DO j = MAX(jps, jds+1), MIN(jpe, jde-2)
+             DO k = k_start, k_end
+             DO i = MAX(ips, ids+1), MIN(ipe, ide-2)
+
+               ! Flux fractions (from advect_scalar_mono) are normalized by
+               ! cell_mass = mu*q_ref, so they are fractional rates of the
+               ! mu-coupled content.  Neighbor contributions must be scaled by
+               ! mu_old(neighbor)/mu_old(local) so that the mass transferred
+               ! reflects the neighbor's column mass, not the local cell's.
+
+               !--- Old formulation: flux_out normalized by cell_mass = mu*field_old ---
+               !muold_dp = dble(grid%c1h(k)) * dble(grid%mu_1(i,j) + grid%mub(i,j)) + dble(grid%c2h(k))
+               !munew_dp = dble(grid%c1h(k)) * dble(grid%mu_2(i,j) + grid%mub(i,j)) + dble(grid%c2h(k))
+               !total_frac_out = grid%flux_out_east(i,k,j)   &
+               !               + grid%flux_out_west(i,k,j)   &
+               !               + grid%flux_out_north(i,k,j)  &
+               !               + grid%flux_out_south(i,k,j)  &
+               !               + grid%flux_out_top(i,k,j)    &
+               !               + grid%flux_out_bottom(i,k,j)
+               !chem_dp = dble(chem_old(i,k,j,ic2)) * (1.0d0 + dble(dt_rk) * dble(total_frac_out))
+               !mu_nb_dp = dble(grid%c1h(k)) * dble(grid%mu_1(i-1,j) + grid%mub(i-1,j)) + dble(grid%c2h(k))
+               !chem_dp = chem_dp - dble(dt_rk) * dble(chem_old(i-1,k,j,ic2)) * dble(grid%flux_out_east(i-1,k,j)) * mu_nb_dp / muold_dp
+               ! ... (similar for other directions)
+               !chem(i,k,j,ic2) = real(chem_dp * muold_dp / munew_dp)
+
+               !--- Flux decomposition advection ---
+               ! R_new = R_old * (1 - dt*total_frac_out)
+               !       + sum_nb dt * R_old(nb) * flux_out(nb -> local) / mr_old(nb)
+               chem_dp = dble(chem_old(i,k,j,ic2))
+               IF ( chem_old(i,k,j,num_3d_c) .ne. 0.0 ) THEN
+                 total_frac_out = (grid%flux_out_east(i,k,j)   &
+                                +  grid%flux_out_west(i,k,j)   &
+                                +  grid%flux_out_north(i,k,j)  &
+                                +  grid%flux_out_south(i,k,j)  &
+                                +  grid%flux_out_top(i,k,j)    &
+                                +  grid%flux_out_bottom(i,k,j)) &
+                                / chem_old(i,k,j,num_3d_c)
+                 chem_dp = dble(chem_old(i,k,j,ic2)) * (1.0d0 - dble(dt_rk) * dble(total_frac_out))
+               ENDIF
+               IF ( chem_old(i-1,k,j,num_3d_c) .ne. 0.0 ) THEN
+                 chem_dp = chem_dp                                                        &
+                   + dble(dt_rk) * dble(chem_old(i-1,k,j,ic2))                            &
+                     * dble(grid%flux_out_east(i-1,k,j))                                  &
+                     / dble(chem_old(i-1,k,j,num_3d_c))
+               ENDIF
+               IF ( chem_old(i+1,k,j,num_3d_c) .ne. 0.0 ) THEN
+                 chem_dp = chem_dp                                                        &
+                   + dble(dt_rk) * dble(chem_old(i+1,k,j,ic2))                            &
+                     * dble(grid%flux_out_west(i+1,k,j))                                  &
+                     / dble(chem_old(i+1,k,j,num_3d_c))
+               ENDIF
+               IF ( chem_old(i,k,j-1,num_3d_c) .ne. 0.0 ) THEN
+                 chem_dp = chem_dp                                                        &
+                   + dble(dt_rk) * dble(chem_old(i,k,j-1,ic2))                            &
+                     * dble(grid%flux_out_north(i,k,j-1))                                 &
+                     / dble(chem_old(i,k,j-1,num_3d_c))
+               ENDIF
+               IF ( chem_old(i,k,j+1,num_3d_c) .ne. 0.0 ) THEN
+                 chem_dp = chem_dp                                                        &
+                   + dble(dt_rk) * dble(chem_old(i,k,j+1,ic2))                            &
+                     * dble(grid%flux_out_south(i,k,j+1))                                 &
+                     / dble(chem_old(i,k,j+1,num_3d_c))
+               ENDIF
+               IF ( k > k_start ) THEN
+                 IF ( chem_old(i,k-1,j,num_3d_c) .ne. 0.0 ) THEN
+                   chem_dp = chem_dp                                                      &
+                     + dble(dt_rk) * dble(chem_old(i,k-1,j,ic2))                          &
+                       * dble(grid%flux_out_top(i,k-1,j))                                 &
+                       / dble(chem_old(i,k-1,j,num_3d_c))
+                 ENDIF
+               ENDIF
+               IF ( k < k_end ) THEN
+                 IF ( chem_old(i,k+1,j,num_3d_c) .ne. 0.0 ) THEN
+                   chem_dp = chem_dp                                                      &
+                     + dble(dt_rk) * dble(chem_old(i,k+1,j,ic2))                          &
+                       * dble(grid%flux_out_bottom(i,k+1,j))                              &
+                       / dble(chem_old(i,k+1,j,num_3d_c))
+                 ENDIF
+               ENDIF
+               chem(i,k,j,ic2) = real(chem_dp)
+
+               !--- Intensive variable advection (disabled) ---
+               ! R_new = R_old + sum((R_nb - R_local) * dt * flux_out(nb) * mr_old(nb)) / mr_new
+               !chem_dp = dble(chem_old(i,k,j,ic2))
+               !IF ( chem(i,k,j,num_3d_c) .ne. 0.0 ) THEN
+               !  IF ( chem_old(i-1,k,j,num_3d_c) .ne. 0.0 ) THEN
+               !    chem_dp = chem_dp + (dble(chem_old(i-1,k,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !      * dble(dt_rk) * dble(grid%flux_out_east(i-1,k,j))                            &
+               !      * dble(chem_old(i-1,k,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !  ENDIF
+               !  IF ( chem_old(i+1,k,j,num_3d_c) .ne. 0.0 ) THEN
+               !    chem_dp = chem_dp + (dble(chem_old(i+1,k,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !      * dble(dt_rk) * dble(grid%flux_out_west(i+1,k,j))                            &
+               !      * dble(chem_old(i+1,k,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !  ENDIF
+               !  IF ( chem_old(i,k,j-1,num_3d_c) .ne. 0.0 ) THEN
+               !    chem_dp = chem_dp + (dble(chem_old(i,k,j-1,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !      * dble(dt_rk) * dble(grid%flux_out_north(i,k,j-1))                           &
+               !      * dble(chem_old(i,k,j-1,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !  ENDIF
+               !  IF ( chem_old(i,k,j+1,num_3d_c) .ne. 0.0 ) THEN
+               !    chem_dp = chem_dp + (dble(chem_old(i,k,j+1,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !      * dble(dt_rk) * dble(grid%flux_out_south(i,k,j+1))                           &
+               !      * dble(chem_old(i,k,j+1,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !  ENDIF
+               !  IF ( k > k_start ) THEN
+               !    IF ( chem_old(i,k-1,j,num_3d_c) .ne. 0.0 ) THEN
+               !      chem_dp = chem_dp + (dble(chem_old(i,k-1,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !        * dble(dt_rk) * dble(grid%flux_out_top(i,k-1,j))                             &
+               !        * dble(chem_old(i,k-1,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !    ENDIF
+               !  ENDIF
+               !  IF ( k < k_end ) THEN
+               !    IF ( chem_old(i,k+1,j,num_3d_c) .ne. 0.0 ) THEN
+               !      chem_dp = chem_dp + (dble(chem_old(i,k+1,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
+               !        * dble(dt_rk) * dble(grid%flux_out_bottom(i,k+1,j))                          &
+               !        * dble(chem_old(i,k+1,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
+               !    ENDIF
+               !  ENDIF
+               !ENDIF
+               !chem(i,k,j,ic2) = real(chem_dp)
+
+             ENDDO
+             ENDDO
+             ENDDO
+           ENDDO
+
+         ! Debug: check chem after update
+         WRITE(*,*) 'LATENT DEBUG: chem(:,:,:,PARAM_FIRST_SCALAR) sum after=', &
+             SUM(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR))
+         WRITE(*,*) 'LATENT DEBUG: chem(:,:,:,PARAM_FIRST_SCALAR) min/max after=', &
+             MINVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR)), &
+             MAXVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR))
+
+       ENDIF
+
      ENDIF chem_scalar_advance
 BENCH_END(chem_adv_tim)
 #endif

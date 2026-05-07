@@ -9505,7 +9505,10 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
                                   rdx, rdy, rdzw, dt,            &
                                   ids, ide, jds, jde, kds, kde,  &
                                   ims, ime, jms, jme, kms, kme,  &
-                                  its, ite, jts, jte, kts, kte  )
+                                  its, ite, jts, jte, kts, kte,   &
+                                  flux_out_east, flux_out_west,   &
+                                  flux_out_north, flux_out_south, &
+                                  flux_out_top, flux_out_bottom  )
 
 !  monotonic advection option
 !  for scalars in WRF RK3 advection.  This version is memory intensive ->
@@ -9556,6 +9559,10 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
                                                                   rdy,  &
                                                                   dt
 
+   REAL , DIMENSION( ims:ime , kms:kme , jms:jme ) , INTENT(INOUT   ), optional :: &
+                                  flux_out_east, flux_out_west,   &
+                                  flux_out_north, flux_out_south, &
+                                  flux_out_top, flux_out_bottom                                                                 
    ! Local data
    
    INTEGER :: i, j, k, itf, jtf, ktf
@@ -9584,6 +9591,8 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
 
    REAL :: flux_out, ph_low, flux_in, ph_hi, scale
    REAL, PARAMETER :: eps=1.e-20
+
+   REAL :: cell_mass
 
 
 ! definition of flux operators, 3rd, 4rth, 5th or 6th order
@@ -10456,13 +10465,51 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
   j_start = jts
   j_end   = MIN(jte,jde-1)
 
+  if (present(flux_out_top) .and. present(flux_out_bottom)) then
+  flux_out_top = 0.0d0
+  flux_out_bottom = 0.0d0
+  DO j = j_start, j_end
+  DO k = kts, ktf
+  DO i = i_start, i_end
+    !cell_mass = ((c1(k)*mub(i,j)+c2(k)) + c1(k)*mu_old(i,j)) * field_old(i,k,j)
+    !flux_out_top(i,k,j) = -rdzw(k) * min(0.0, fqz(i,k+1,j)       &
+    !                               + fqzl(i,k+1,j)) / cell_mass
+    !flux_out_bottom(i,k,j) = -rdzw(k) * (-max(0.0, fqz(i,k,j)    &
+    !                               + fqzl(i,k,j))) / cell_mass
+    ! NOTE: msfty factor here matches old working code but the z tendency
+    ! term in this subroutine has no map factor. Revisit whether msfty
+    ! belongs here or is absorbed elsewhere.
+    ! Normalize by face-interpolated level-dependent column mass.
+    ! Top face (k+1): average c1/c2 at levels k and k+1
+    ! At k=ktf, k+1=kde is valid (c1/c2 dimensioned kms:kme)
+    flux_out_top(i,k,j) = msfty(i,j) * rdzw(k) * min(0.0, fqz(i,k+1,j) &
+                                   + fqzl(i,k+1,j))                      &
+                                   / (0.5*(c1(k)+c1(k+1))*mut(i,j)       &
+                                    + 0.5*(c2(k)+c2(k+1)))
+    ! Bottom face (k): average c1/c2 at levels k and k-1
+    ! At k=kts, use c1(k) only (no level below)
+    IF ( k > kts ) THEN
+      flux_out_bottom(i,k,j) = msfty(i,j) * rdzw(k) * (-max(0.0, fqz(i,k,j) &
+                                     + fqzl(i,k,j)))                     &
+                                     / (0.5*(c1(k)+c1(k-1))*mut(i,j)     &
+                                      + 0.5*(c2(k)+c2(k-1)))
+    ELSE
+      flux_out_bottom(i,k,j) = msfty(i,j) * rdzw(k) * (-max(0.0, fqz(i,k,j) &
+                                     + fqzl(i,k,j)))                     &
+                                     / (c1(k)*mut(i,j) + c2(k))
+    ENDIF
+  end do
+  end do
+  end do
+end if
+
   DO j = j_start, j_end
   DO k = kts, ktf
   DO i = i_start, i_end
 
-     tendency (i,k,j) = tendency(i,k,j)                           &
-                            -rdzw(k)*( fqz (i,k+1,j)-fqz (i,k,j)  &
-                                      +fqzl(i,k+1,j)-fqzl(i,k,j))
+     tendency (i,k,j) = tendency(i,k,j)               &
+                           -rdzw(k)*( fqz (i,k+1,j)-fqz (i,k,j)  &
+                                     +fqzl(i,k+1,j)-fqzl(i,k,j))
 
   ENDDO
   ENDDO
@@ -10518,6 +10565,33 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
   ENDDO
   END IF
 
+  ! Get outward fluxes in x direction
+  ! Use wider bounds than tendency to include boundary cells,
+  ! so that neighbor lookups in solve_em can access flux_out of boundary cells.
+  if (present(flux_out_east) .and. present(flux_out_west)) then
+   flux_out_east = 0.0d0
+   flux_out_west = 0.0d0
+
+  DO j = j_start, j_end
+  DO k = kts, ktf
+  DO i = MAX(its,ids), MIN(ite,ide-1)
+      !cell_mass = ((c1(k)*mub(i,j)+c2(k)) + c1(k)*mu_old(i,j)) * field_old(i,k,j)
+      !flux_out_east(i,k,j) = - msftx(i,j)*( rdx*max(0.0, fqx(i+1,k,j)    &
+      !                             + fqxl(i+1,k,j))) /  cell_mass
+      !flux_out_west(i,k,j) = - msftx(i,j)*( rdx*(-min(0.0, fqx(i,k,j)   &
+      !                             + fqxl(i,k,j)))) /  cell_mass
+      ! Normalize by level-dependent face column mass
+      flux_out_east(i,k,j) = msftx(i,j) * rdx * max(0.0, fqx(i+1,k,j)    &
+                                   + fqxl(i+1,k,j))                        &
+                                   / (c1(k)*0.5*(mut(i,j) + mut(i+1,j)) + c2(k))
+      flux_out_west(i,k,j) = msftx(i,j) * rdx * (-min(0.0, fqx(i,k,j)    &
+                                   + fqxl(i,k,j)))                         &
+                                   / (c1(k)*0.5*(mut(i,j) + mut(i-1,j)) + c2(k))
+  end do
+  end do
+  end do
+end if
+
 ! y flux divergence
 !
   i_start = its
@@ -10556,6 +10630,32 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
   ENDDO
   ENDDO
   END IF
+
+  ! Get outward fluxes in y direction
+  ! Use wider bounds than tendency to include boundary cells,
+  ! so that neighbor lookups in solve_em can access flux_out of boundary cells.
+  if (present(flux_out_north) .and. present(flux_out_south)) then
+  flux_out_north = 0.0d0
+  flux_out_south = 0.0d0
+  DO j = MAX(jts,jds), MIN(jte,jde-1)
+  DO k = kts, ktf
+  DO i = i_start, i_end
+      !cell_mass = ((c1(k)*mub(i,j)+c2(k)) + c1(k)*mu_old(i,j)) * field_old(i,k,j)
+      !flux_out_north(i,k,j) = - msftx(i,j)*( rdy*max(0.0, fqy(i,k,j+1)   &
+      !                             + fqyl(i,k,j+1))) /  cell_mass
+      !flux_out_south(i,k,j) = - msftx(i,j)*( rdy*(-min(0.0, fqy(i,k,j)  &
+      !                             + fqyl(i,k,j)))) /  cell_mass
+      ! Normalize by level-dependent face column mass
+      flux_out_north(i,k,j) = msftx(i,j) * rdy * max(0.0, fqy(i,k,j+1)   &
+                                   + fqyl(i,k,j+1))                        &
+                                   / (c1(k)*0.5*(mut(i,j) + mut(i,j+1)) + c2(k))
+      flux_out_south(i,k,j) = msftx(i,j) * rdy * (-min(0.0, fqy(i,k,j)   &
+                                   + fqyl(i,k,j)))                         &
+                                   / (c1(k)*0.5*(mut(i,j) + mut(i,j-1)) + c2(k))
+  end do
+  end do
+  end do
+end if
 
 END SUBROUTINE advect_scalar_mono
 
