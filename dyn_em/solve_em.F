@@ -2882,6 +2882,15 @@ end if
                                                * dble(grid%flux_out_south(i,k,j+1))           &
                                                * dble(grid%msftx(i,j))                        &
                                                / dble(grid%msftx(i,j+1))
+               ! NOTE: flux_out_top/bottom in advect_scalar_mono is normalized by
+               ! rdzw(k) of the *originating* cell (see module_advect_em.F).
+               ! On a uniform-eta grid this cancels because rdzw(k-1)=rdzw(k).
+               ! On a stretched grid the vertical inflow terms below need an
+               ! rdzw(k)/rdzw(neighbor_k) ratio, analogous to the
+               ! msftx(local)/msftx(neighbor) ratio used in the horizontal
+               ! inflow above.  Tested clean to roundoff on a near-uniform
+               ! vertical grid (2026-05-10) — re-test on a stretched profile
+               ! before trusting vertical advection on a non-uniform mesh.
                IF ( k > k_start ) THEN
                  chem_dp = chem_dp + dt_eff_dp * mu_face_b * dble(chem_old(i,k-1,j,ic2))      &
                                                           * dble(grid%flux_out_top(i,k-1,j))
