@@ -10368,6 +10368,26 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
 
 !-- here is the limiter...
 
+   !!! TESTING: zero flux components for any direction we want to disable
+   !!! BEFORE the limiter runs.  The limiter computes flux_in/flux_out
+   !!! using all six face fluxes; if we instead disable a direction by
+   !!! gating its tendency contribution AFTER the limiter, the limiter's
+   !!! monotonicity guarantee is broken and N can swing negative.  Zeroing
+   !!! the fq arrays here makes the limiter see the actual flux pattern
+   !!! and keep the field monotonic in the remaining directions.
+   IF (.FALSE.) THEN
+     fqx  = 0.0
+     fqxl = 0.0
+   END IF
+   IF (.FALSE.) THEN
+     fqy  = 0.0
+     fqyl = 0.0
+   END IF
+   IF (.TRUE.) THEN
+     fqz  = 0.0
+     fqzl = 0.0
+   END IF
+
    DO j=j_start, j_end
    DO k=kts, ktf
    DO i=i_start, i_end
@@ -10375,7 +10395,7 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
 ! ----------------------------------------------------------------------------------------------
 ! IEVA
 ! We need to correct for the partial divergence created by the IEVA scheme.
-! If there is no implicit vertical advection, this term == 1.0.  
+! If there is no implicit vertical advection, this term == 1.0.
 ! Else, it rescales the qmax & qmin value to reflect the partial divergence present in both the
 ! low-order and high-order fluxes because the VV field is partioned.
 ! ----------------------------------------------------------------------------------------------
@@ -10476,25 +10496,24 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
     !                               + fqzl(i,k+1,j)) / cell_mass
     !flux_out_bottom(i,k,j) = -rdzw(k) * (-max(0.0, fqz(i,k,j)    &
     !                               + fqzl(i,k,j))) / cell_mass
-    ! NOTE: msfty factor here matches old working code but the z tendency
-    ! term in this subroutine has no map factor. Revisit whether msfty
-    ! belongs here or is absorbed elsewhere.
     ! Normalize by face-interpolated level-dependent column mass.
+    ! No map factor: the z-tendency in this subroutine is -rdzw*(fqz(k+1)-fqz(k))
+    ! with no msfty, so flux_out_top/bottom must match that to be consistent.
     ! Top face (k+1): average c1/c2 at levels k and k+1
     ! At k=ktf, k+1=kde is valid (c1/c2 dimensioned kms:kme)
-    flux_out_top(i,k,j) = msfty(i,j) * rdzw(k) * min(0.0, fqz(i,k+1,j) &
+    flux_out_top(i,k,j) = rdzw(k) * min(0.0, fqz(i,k+1,j) &
                                    + fqzl(i,k+1,j))                      &
                                    / (0.5*(c1(k)+c1(k+1))*mut(i,j)       &
                                     + 0.5*(c2(k)+c2(k+1)))
     ! Bottom face (k): average c1/c2 at levels k and k-1
     ! At k=kts, use c1(k) only (no level below)
     IF ( k > kts ) THEN
-      flux_out_bottom(i,k,j) = msfty(i,j) * rdzw(k) * (-max(0.0, fqz(i,k,j) &
+      flux_out_bottom(i,k,j) = rdzw(k) * (-max(0.0, fqz(i,k,j) &
                                      + fqzl(i,k,j)))                     &
                                      / (0.5*(c1(k)+c1(k-1))*mut(i,j)     &
                                       + 0.5*(c2(k)+c2(k-1)))
     ELSE
-      flux_out_bottom(i,k,j) = msfty(i,j) * rdzw(k) * (-max(0.0, fqz(i,k,j) &
+      flux_out_bottom(i,k,j) = rdzw(k) * (-max(0.0, fqz(i,k,j) &
                                      + fqzl(i,k,j)))                     &
                                      / (c1(k)*mut(i,j) + c2(k))
     ENDIF
@@ -10503,6 +10522,8 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
   end do
 end if
 
+  !!! TESTING: gate z-direction tendency contribution !!!
+  IF (.TRUE.) THEN
   DO j = j_start, j_end
   DO k = kts, ktf
   DO i = i_start, i_end
@@ -10514,6 +10535,7 @@ end if
   ENDDO
   ENDDO
   ENDDO
+  END IF
 
   IF(tenddec) THEN
   DO j = j_start, j_end
@@ -10538,6 +10560,8 @@ end if
   IF(degrade_xs) i_start = MAX(its,ids+1)
   IF(degrade_xe) i_end   = MIN(ite,ide-2)
 
+  !!! TESTING: gate x-direction tendency contribution !!!
+  IF (.TRUE.) THEN
   DO j = j_start, j_end
   DO k = kts, ktf
   DO i = i_start, i_end
@@ -10550,6 +10574,7 @@ end if
   ENDDO
   ENDDO
   ENDDO
+  END IF
 
   IF(tenddec) THEN
   DO j = j_start, j_end
@@ -10604,6 +10629,8 @@ end if
   IF(degrade_ys) j_start = MAX(jts,jds+1)
   IF(degrade_ye) j_end   = MIN(jte,jde-2)
 
+  !!! TESTING: gate y-direction tendency contribution !!!
+  IF (.TRUE.) THEN
   DO j = j_start, j_end
   DO k = kts, ktf
   DO i = i_start, i_end
@@ -10616,6 +10643,7 @@ end if
   ENDDO
   ENDDO
   ENDDO
+  END IF
 
   IF(tenddec) THEN
   DO j = j_start, j_end

@@ -165,6 +165,8 @@ SUBROUTINE solve_em ( grid , config_flags  &
    INTEGER :: ic2
    REAL    :: total_frac_out, muold_val, munew_val, mu_nb
    REAL(8) :: chem_dp, mu_nb_dp, muold_dp, munew_dp, ratio_dp, ratio_nb
+   REAL(8) :: mu_face_e, mu_face_w, mu_face_n, mu_face_s, mu_face_t, mu_face_b
+   REAL(8) :: total_outflow_dp, dt_eff_dp
    REAL, DIMENSION(grid%sm31:grid%em31,grid%sm32:grid%em32,grid%sm33:grid%em33) :: &
                                                    tmp_flux_east,  &
                                                    tmp_flux_west,  &
@@ -2725,6 +2727,34 @@ end if
              MINVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR)), &
              MAXVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),PARAM_FIRST_SCALAR))
 
+         ! Debug: check N (num_3d_c) and the 2D mu fields for NaN/Inf or
+         ! suspicious values.  If N or muts has NaN, the chem_dp NaN we see
+         ! in the latent loop is a downstream symptom of a WRF state
+         ! corruption, not our LV code.
+         WRITE(*,*) 'LATENT DEBUG: chem(:,:,:,num_3d_c) min/max=',           &
+             MINVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c)),     &
+             MAXVAL(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c))
+         WRITE(*,*) 'LATENT DEBUG: chem_old(:,:,:,num_3d_c) min/max=',       &
+             MINVAL(chem_old(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c)), &
+             MAXVAL(chem_old(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c))
+         WRITE(*,*) 'LATENT DEBUG: N has NaN (chem)=',                       &
+             ANY(chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c) /=        &
+                 chem(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c)),         &
+             ' (chem_old)=',                                                 &
+             ANY(chem_old(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c) /=    &
+                 chem_old(ips:MIN(ipe,ide-1),kms:MIN(kme,kde-1),jps:MIN(jpe,jde-1),num_3d_c))
+         WRITE(*,*) 'LATENT DEBUG: muts min/max=',                           &
+             MINVAL(grid%muts(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1))),       &
+             MAXVAL(grid%muts(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)))
+         WRITE(*,*) 'LATENT DEBUG: muts has NaN=',                           &
+             ANY(grid%muts(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)) /=         &
+                 grid%muts(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)))
+         WRITE(*,*) 'LATENT DEBUG: mu_1+mub min/max=',                       &
+             MINVAL(grid%mu_1(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)) +       &
+                    grid%mub(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1))),        &
+             MAXVAL(grid%mu_1(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)) +       &
+                    grid%mub(ips:MIN(ipe,ide-1),jps:MIN(jpe,jde-1)))
+
          ! Boundary-safe loop indices:
          ! i: skip first and last to allow i-1, i+1 access
          ! j: skip first and last to allow j-1, j+1 access
@@ -2755,102 +2785,180 @@ end if
                ! ... (similar for other directions)
                !chem(i,k,j,ic2) = real(chem_dp * muold_dp / munew_dp)
 
-               !--- Flux decomposition advection ---
-               ! R_new = R_old * (1 - dt*total_frac_out)
-               !       + sum_nb dt * R_old(nb) * flux_out(nb -> local) / mr_old(nb)
-               chem_dp = dble(chem_old(i,k,j,ic2))
-               IF ( chem_old(i,k,j,num_3d_c) .ne. 0.0 ) THEN
-                 total_frac_out = (grid%flux_out_east(i,k,j)   &
-                                +  grid%flux_out_west(i,k,j)   &
-                                +  grid%flux_out_north(i,k,j)  &
-                                +  grid%flux_out_south(i,k,j)  &
-                                +  grid%flux_out_top(i,k,j)    &
-                                +  grid%flux_out_bottom(i,k,j)) &
-                                / chem_old(i,k,j,num_3d_c)
-                 chem_dp = dble(chem_old(i,k,j,ic2)) * (1.0d0 - dble(dt_rk) * dble(total_frac_out))
-               ENDIF
-               IF ( chem_old(i-1,k,j,num_3d_c) .ne. 0.0 ) THEN
-                 chem_dp = chem_dp                                                        &
-                   + dble(dt_rk) * dble(chem_old(i-1,k,j,ic2))                            &
-                     * dble(grid%flux_out_east(i-1,k,j))                                  &
-                     / dble(chem_old(i-1,k,j,num_3d_c))
-               ENDIF
-               IF ( chem_old(i+1,k,j,num_3d_c) .ne. 0.0 ) THEN
-                 chem_dp = chem_dp                                                        &
-                   + dble(dt_rk) * dble(chem_old(i+1,k,j,ic2))                            &
-                     * dble(grid%flux_out_west(i+1,k,j))                                  &
-                     / dble(chem_old(i+1,k,j,num_3d_c))
-               ENDIF
-               IF ( chem_old(i,k,j-1,num_3d_c) .ne. 0.0 ) THEN
-                 chem_dp = chem_dp                                                        &
-                   + dble(dt_rk) * dble(chem_old(i,k,j-1,ic2))                            &
-                     * dble(grid%flux_out_north(i,k,j-1))                                 &
-                     / dble(chem_old(i,k,j-1,num_3d_c))
-               ENDIF
-               IF ( chem_old(i,k,j+1,num_3d_c) .ne. 0.0 ) THEN
-                 chem_dp = chem_dp                                                        &
-                   + dble(dt_rk) * dble(chem_old(i,k,j+1,ic2))                            &
-                     * dble(grid%flux_out_south(i,k,j+1))                                 &
-                     / dble(chem_old(i,k,j+1,num_3d_c))
+               !--- Number-weighted intensive advection (mu-coupled) ---
+               ! chem(ic2) stores LV intensively (per-particle).  The exact
+               ! mu-coupled budget for the extensive product LV*N is
+               !   mu_new*LV_new*N_new = mu_old*LV_old*N_old
+               !       - dt*LV_old(local) * sum(mu_face * flux_out_local)
+               !       + dt * sum_nb mu_face * LV_old(nb) * flux_out_nb
+               ! where each mu_face is the same face column mass that was
+               ! used in advect_scalar_mono to normalize that flux_out, so
+               ! face-by-face conservation is exact.  After building the
+               ! extensive content, divide by mu_new(local)*N_new(local) to
+               ! recover intensive LV.
+               ! The standard chem N update calls rk_update_scalar (not _pd)
+               ! with (mu_old, mu_new, mu_base) = (mu_1, mu_2, mub) — i.e. the
+               ! new mass column uses mu_2, not mu_1.  Match that here so the
+               ! LV budget closes against the actual N update:
+               !   (c1*(mu_2+mub)+c2)*N_new = (c1*(mu_1+mub)+c2)*N_old + dt*advect_tend*msfty
+               ! `grid%muts` only enters through mu_face_* normalization in
+               ! advect_scalar_mono and cancels when we re-multiply by mu_face.
+               muold_dp = dble(grid%c1h(k)) * dble(grid%mu_1(i,j) + grid%mub(i,j)) + dble(grid%c2h(k))
+               munew_dp = dble(grid%c1h(k)) * dble(grid%mu_2(i,j) + grid%mub(i,j)) + dble(grid%c2h(k))
+
+               ! Horizontal face column masses: average grid%muts across adjacent cells at level k
+               mu_face_e = dble(grid%c1h(k)) * 0.5d0 *                                &
+                           ( dble(grid%muts(i  ,j)) + dble(grid%muts(i+1,j)) )       &
+                         + dble(grid%c2h(k))
+               mu_face_w = dble(grid%c1h(k)) * 0.5d0 *                                &
+                           ( dble(grid%muts(i  ,j)) + dble(grid%muts(i-1,j)) )       &
+                         + dble(grid%c2h(k))
+               mu_face_n = dble(grid%c1h(k)) * 0.5d0 *                                &
+                           ( dble(grid%muts(i,j  )) + dble(grid%muts(i,j+1)) )       &
+                         + dble(grid%c2h(k))
+               mu_face_s = dble(grid%c1h(k)) * 0.5d0 *                                &
+                           ( dble(grid%muts(i,j  )) + dble(grid%muts(i,j-1)) )       &
+                         + dble(grid%c2h(k))
+
+               ! Vertical face column masses: average c1h/c2h across levels, muts at local (i,j).
+               IF ( k < k_end ) THEN
+                 mu_face_t = 0.5d0 * (dble(grid%c1h(k)) + dble(grid%c1h(k+1)))        &
+                                   * dble(grid%muts(i,j))                             &
+                           + 0.5d0 * (dble(grid%c2h(k)) + dble(grid%c2h(k+1)))
+               ELSE
+                 mu_face_t = munew_dp
                ENDIF
                IF ( k > k_start ) THEN
-                 IF ( chem_old(i,k-1,j,num_3d_c) .ne. 0.0 ) THEN
-                   chem_dp = chem_dp                                                      &
-                     + dble(dt_rk) * dble(chem_old(i,k-1,j,ic2))                          &
-                       * dble(grid%flux_out_top(i,k-1,j))                                 &
-                       / dble(chem_old(i,k-1,j,num_3d_c))
-                 ENDIF
+                 mu_face_b = 0.5d0 * (dble(grid%c1h(k)) + dble(grid%c1h(k-1)))        &
+                                   * dble(grid%muts(i,j))                             &
+                           + 0.5d0 * (dble(grid%c2h(k)) + dble(grid%c2h(k-1)))
+               ELSE
+                 mu_face_b = munew_dp
+               ENDIF
+
+               ! Sum of mu-weighted outflow rates from local cell
+               total_outflow_dp = mu_face_e * dble(grid%flux_out_east(i,k,j))         &
+                                + mu_face_w * dble(grid%flux_out_west(i,k,j))         &
+                                + mu_face_n * dble(grid%flux_out_north(i,k,j))        &
+                                + mu_face_s * dble(grid%flux_out_south(i,k,j))
+               IF ( k < k_end ) THEN
+                 total_outflow_dp = total_outflow_dp + mu_face_t * dble(grid%flux_out_top(i,k,j))
+               ENDIF
+               IF ( k > k_start ) THEN
+                 total_outflow_dp = total_outflow_dp + mu_face_b * dble(grid%flux_out_bottom(i,k,j))
+               ENDIF
+
+               ! advect_scalar_mono builds tendency with msftx only; rk_update_scalar
+               ! then multiplies by msfty(i,j) before updating N.  flux_out_* carries
+               ! the msftx factor, so the LV in/out terms need an extra msfty(local)
+               ! to mirror the actual N update.  Without it, a uniform LV drifts.
+               dt_eff_dp = dble(dt_rk) * dble(grid%msfty(i,j))
+
+               ! Build mu_new * LV_new * N_new
+               chem_dp = muold_dp * dble(chem_old(i,k,j,ic2)) * dble(chem_old(i,k,j,num_3d_c))    &
+                       - dt_eff_dp * dble(chem_old(i,k,j,ic2)) * total_outflow_dp
+
+               ! Inflow from each neighbor uses the shared face's mu_face.
+               ! The horizontal flux_out_* values have msftx(neighbor) baked in
+               ! (from advect_scalar_mono's normalization), but the divergence
+               ! operator at the local cell uses msftx(local).  Multiply each
+               ! horizontal inflow term by msftx(local)/msftx(neighbor) to
+               ! compensate, so the LV update mirrors the standard advection
+               ! of N exactly.
+               chem_dp = chem_dp                                                              &
+                       + dt_eff_dp * mu_face_w * dble(chem_old(i-1,k,j,ic2))                  &
+                                               * dble(grid%flux_out_east(i-1,k,j))            &
+                                               * dble(grid%msftx(i,j))                        &
+                                               / dble(grid%msftx(i-1,j))                      &
+                       + dt_eff_dp * mu_face_e * dble(chem_old(i+1,k,j,ic2))                  &
+                                               * dble(grid%flux_out_west(i+1,k,j))            &
+                                               * dble(grid%msftx(i,j))                        &
+                                               / dble(grid%msftx(i+1,j))                      &
+                       + dt_eff_dp * mu_face_s * dble(chem_old(i,k,j-1,ic2))                  &
+                                               * dble(grid%flux_out_north(i,k,j-1))           &
+                                               * dble(grid%msftx(i,j))                        &
+                                               / dble(grid%msftx(i,j-1))                      &
+                       + dt_eff_dp * mu_face_n * dble(chem_old(i,k,j+1,ic2))                  &
+                                               * dble(grid%flux_out_south(i,k,j+1))           &
+                                               * dble(grid%msftx(i,j))                        &
+                                               / dble(grid%msftx(i,j+1))
+               IF ( k > k_start ) THEN
+                 chem_dp = chem_dp + dt_eff_dp * mu_face_b * dble(chem_old(i,k-1,j,ic2))      &
+                                                          * dble(grid%flux_out_top(i,k-1,j))
                ENDIF
                IF ( k < k_end ) THEN
-                 IF ( chem_old(i,k+1,j,num_3d_c) .ne. 0.0 ) THEN
-                   chem_dp = chem_dp                                                      &
-                     + dble(dt_rk) * dble(chem_old(i,k+1,j,ic2))                          &
-                       * dble(grid%flux_out_bottom(i,k+1,j))                              &
-                       / dble(chem_old(i,k+1,j,num_3d_c))
-                 ENDIF
+                 chem_dp = chem_dp + dt_eff_dp * mu_face_t * dble(chem_old(i,k+1,j,ic2))      &
+                                                          * dble(grid%flux_out_bottom(i,k+1,j))
                ENDIF
-               chem(i,k,j,ic2) = real(chem_dp)
 
-               !--- Intensive variable advection (disabled) ---
-               ! R_new = R_old + sum((R_nb - R_local) * dt * flux_out(nb) * mr_old(nb)) / mr_new
-               !chem_dp = dble(chem_old(i,k,j,ic2))
-               !IF ( chem(i,k,j,num_3d_c) .ne. 0.0 ) THEN
-               !  IF ( chem_old(i-1,k,j,num_3d_c) .ne. 0.0 ) THEN
-               !    chem_dp = chem_dp + (dble(chem_old(i-1,k,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !      * dble(dt_rk) * dble(grid%flux_out_east(i-1,k,j))                            &
-               !      * dble(chem_old(i-1,k,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !  ENDIF
-               !  IF ( chem_old(i+1,k,j,num_3d_c) .ne. 0.0 ) THEN
-               !    chem_dp = chem_dp + (dble(chem_old(i+1,k,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !      * dble(dt_rk) * dble(grid%flux_out_west(i+1,k,j))                            &
-               !      * dble(chem_old(i+1,k,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !  ENDIF
-               !  IF ( chem_old(i,k,j-1,num_3d_c) .ne. 0.0 ) THEN
-               !    chem_dp = chem_dp + (dble(chem_old(i,k,j-1,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !      * dble(dt_rk) * dble(grid%flux_out_north(i,k,j-1))                           &
-               !      * dble(chem_old(i,k,j-1,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !  ENDIF
-               !  IF ( chem_old(i,k,j+1,num_3d_c) .ne. 0.0 ) THEN
-               !    chem_dp = chem_dp + (dble(chem_old(i,k,j+1,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !      * dble(dt_rk) * dble(grid%flux_out_south(i,k,j+1))                           &
-               !      * dble(chem_old(i,k,j+1,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !  ENDIF
-               !  IF ( k > k_start ) THEN
-               !    IF ( chem_old(i,k-1,j,num_3d_c) .ne. 0.0 ) THEN
-               !      chem_dp = chem_dp + (dble(chem_old(i,k-1,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !        * dble(dt_rk) * dble(grid%flux_out_top(i,k-1,j))                             &
-               !        * dble(chem_old(i,k-1,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !    ENDIF
-               !  ENDIF
-               !  IF ( k < k_end ) THEN
-               !    IF ( chem_old(i,k+1,j,num_3d_c) .ne. 0.0 ) THEN
-               !      chem_dp = chem_dp + (dble(chem_old(i,k+1,j,ic2)) - dble(chem_old(i,k,j,ic2))) &
-               !        * dble(dt_rk) * dble(grid%flux_out_bottom(i,k+1,j))                          &
-               !        * dble(chem_old(i,k+1,j,num_3d_c)) / dble(chem(i,k,j,num_3d_c))
-               !    ENDIF
-               !  ENDIF
-               !ENDIF
-               !chem(i,k,j,ic2) = real(chem_dp)
+               ! Defensive: if chem_dp is non-finite (NaN/Inf) the cascade
+               ! has reached this cell from a corrupted neighbor.  Hold the
+               ! previous value and print the neighbor LVs so we can trace
+               ! where the corruption originated.
+               IF ( .NOT. (chem_dp == chem_dp) .OR. ABS(chem_dp) > 1.0d100 ) THEN
+                 chem(i,k,j,ic2) = chem_old(i,k,j,ic2)
+                 WRITE(*,'(A,3I5,A,I3,A,ES15.6)')                            &
+                   'LATENT NEIGHBOR: bad chem_dp at (i,k,j)=', i, k, j,      &
+                   ' ic2=', ic2, ' chem_dp=', real(chem_dp)
+                 WRITE(*,'(A,7ES15.6)')                                      &
+                   '  LV_old(local,W,E,S,N,Below,Above)=',                   &
+                   chem_old(i  ,k  ,j  ,ic2), chem_old(i-1,k  ,j  ,ic2),     &
+                   chem_old(i+1,k  ,j  ,ic2), chem_old(i  ,k  ,j-1,ic2),     &
+                   chem_old(i  ,k  ,j+1,ic2),                                &
+                   chem_old(i  ,MAX(k-1,k_start),j,ic2),                     &
+                   chem_old(i  ,MIN(k+1,k_end  ),j,ic2)
+                 WRITE(*,'(A,5ES15.6)')                                      &
+                   '  N_old(local,W,E,S,N)=',                                &
+                   chem_old(i,k,j,num_3d_c),   chem_old(i-1,k,j,num_3d_c),   &
+                   chem_old(i+1,k,j,num_3d_c), chem_old(i,k,j-1,num_3d_c),   &
+                   chem_old(i,k,j+1,num_3d_c)
+                 WRITE(*,'(A,5ES15.6)')                                      &
+                   '  muts (local,W,E,S,N)=',                                &
+                   grid%muts(i,j), grid%muts(i-1,j), grid%muts(i+1,j),       &
+                   grid%muts(i,j-1), grid%muts(i,j+1)
+                 WRITE(*,'(A,5ES15.6)')                                      &
+                   '  msftx(local,W,E,S,N)=',                                &
+                   grid%msftx(i,j), grid%msftx(i-1,j), grid%msftx(i+1,j),    &
+                   grid%msftx(i,j-1), grid%msftx(i,j+1)
+                 WRITE(*,'(A,3ES15.6)')                                      &
+                   '  mu_1+mub local, mu_1, mub=',                           &
+                   grid%mu_1(i,j) + grid%mub(i,j), grid%mu_1(i,j),           &
+                   grid%mub(i,j)
+                 WRITE(*,'(A,8ES12.4)')                                      &
+                   '  flux_out E(i-1) W(i+1) N(i,j-1) S(i,j+1) E(i) W(i) N(i,j) S(i,j)=',&
+                   grid%flux_out_east(i-1,k,j),  grid%flux_out_west(i+1,k,j),&
+                   grid%flux_out_north(i,k,j-1), grid%flux_out_south(i,k,j+1),&
+                   grid%flux_out_east(i,k,j),    grid%flux_out_west(i,k,j),  &
+                   grid%flux_out_north(i,k,j),   grid%flux_out_south(i,k,j)
+               ! Recover intensive LV: divide by mu_new * N_new.
+               ! When N_new is too small to give a stable divide, hold the
+               ! previous LV rather than zeroing.  Zeroing creates a sudden
+               ! step in the LV field that propagates to neighbors on
+               ! subsequent timesteps and eventually destabilizes the run.
+               ELSE IF ( chem(i,k,j,num_3d_c) > 1.0e-20 ) THEN
+                 chem(i,k,j,ic2) = real(chem_dp / (munew_dp * dble(chem(i,k,j,num_3d_c))))
+               ELSE
+                 chem(i,k,j,ic2) = chem_old(i,k,j,ic2)
+                 WRITE(*,'(A,3I5,A,I3,A,3ES15.6)') &
+                   'LATENT GUARD: hold-previous fired at (i,k,j)=', i, k, j, &
+                   ' ic2=', ic2,                                            &
+                   ' N_new,N_old,LV_old=', chem(i,k,j,num_3d_c),            &
+                   chem_old(i,k,j,num_3d_c), chem_old(i,k,j,ic2)
+               ENDIF
+
+               ! Catch LV values that are far from the expected range.
+               ! Initial uniform value is around -0.131; flag anything that
+               ! crosses zero or exceeds an order of magnitude in size.
+               IF ( ABS(chem(i,k,j,ic2)) < 1.0e-3 .OR.                      &
+                    ABS(chem(i,k,j,ic2)) > 10.0 ) THEN
+                 WRITE(*,'(A,3I5,A,I3,A,5ES15.6)')                           &
+                   'LATENT WARN: extreme LV at (i,k,j)=', i, k, j,           &
+                   ' ic2=', ic2,                                             &
+                   ' LV_new,LV_old,N_new,N_old,chem_dp=',                    &
+                   chem(i,k,j,ic2), chem_old(i,k,j,ic2),                     &
+                   chem(i,k,j,num_3d_c), chem_old(i,k,j,num_3d_c),           &
+                   real(chem_dp)
+               ENDIF
 
              ENDDO
              ENDDO
