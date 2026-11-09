@@ -166,7 +166,7 @@ SUBROUTINE solve_em ( grid , config_flags  &
    REAL    :: total_frac_out, muold_val, munew_val, mu_nb
    REAL(8) :: chem_dp, mu_nb_dp, muold_dp, munew_dp, ratio_dp, ratio_nb
    REAL(8) :: mu_face_e, mu_face_w, mu_face_n, mu_face_s, mu_face_t, mu_face_b
-   REAL(8) :: total_outflow_dp, dt_eff_dp
+   REAL(8) :: total_outflow_dp, dt_eff_dp, delta_lv_dp
    REAL, DIMENSION(grid%sm31:grid%em31,grid%sm32:grid%em32,grid%sm33:grid%em33) :: &
                                                    tmp_flux_east,  &
                                                    tmp_flux_west,  &
@@ -2837,78 +2837,75 @@ end if
                ENDIF
 
                ! Sum of mu-weighted outflow rates from local cell
-               total_outflow_dp = mu_face_e * dble(grid%flux_out_east(i,k,j))         &
-                                + mu_face_w * dble(grid%flux_out_west(i,k,j))         &
-                                + mu_face_n * dble(grid%flux_out_north(i,k,j))        &
-                                + mu_face_s * dble(grid%flux_out_south(i,k,j))
-               IF ( k < k_end ) THEN
-                 total_outflow_dp = total_outflow_dp + mu_face_t * dble(grid%flux_out_top(i,k,j))
-               ENDIF
-               IF ( k > k_start ) THEN
-                 total_outflow_dp = total_outflow_dp + mu_face_b * dble(grid%flux_out_bottom(i,k,j))
-               ENDIF
-
                ! advect_scalar_mono builds tendency with msftx only; rk_update_scalar
                ! then multiplies by msfty(i,j) before updating N.  flux_out_* carries
                ! the msftx factor, so the LV in/out terms need an extra msfty(local)
                ! to mirror the actual N update.  Without it, a uniform LV drifts.
                dt_eff_dp = dble(dt_rk) * dble(grid%msfty(i,j))
 
-               ! Build mu_new * LV_new * N_new
-               chem_dp = muold_dp * dble(chem_old(i,k,j,ic2)) * dble(chem_old(i,k,j,num_3d_c))    &
-                       - dt_eff_dp * dble(chem_old(i,k,j,ic2)) * total_outflow_dp
-
-               ! Inflow from each neighbor uses the shared face's mu_face.
-               ! The horizontal flux_out_* values have msftx(neighbor) baked in
-               ! (from advect_scalar_mono's normalization), but the divergence
-               ! operator at the local cell uses msftx(local).  Multiply each
-               ! horizontal inflow term by msftx(local)/msftx(neighbor) to
-               ! compensate, so the LV update mirrors the standard advection
-               ! of N exactly.
-               chem_dp = chem_dp                                                              &
-                       + dt_eff_dp * mu_face_w * dble(chem_old(i-1,k,j,ic2))                  &
-                                               * dble(grid%flux_out_east(i-1,k,j))            &
-                                               * dble(grid%msftx(i,j))                        &
-                                               / dble(grid%msftx(i-1,j))                      &
-                       + dt_eff_dp * mu_face_e * dble(chem_old(i+1,k,j,ic2))                  &
-                                               * dble(grid%flux_out_west(i+1,k,j))            &
-                                               * dble(grid%msftx(i,j))                        &
-                                               / dble(grid%msftx(i+1,j))                      &
-                       + dt_eff_dp * mu_face_s * dble(chem_old(i,k,j-1,ic2))                  &
-                                               * dble(grid%flux_out_north(i,k,j-1))           &
-                                               * dble(grid%msftx(i,j))                        &
-                                               / dble(grid%msftx(i,j-1))                      &
-                       + dt_eff_dp * mu_face_n * dble(chem_old(i,k,j+1,ic2))                  &
-                                               * dble(grid%flux_out_south(i,k,j+1))           &
-                                               * dble(grid%msftx(i,j))                        &
-                                               / dble(grid%msftx(i,j+1))
-               ! NOTE: flux_out_top/bottom in advect_scalar_mono is normalized by
-               ! rdzw(k) of the *originating* cell (see module_advect_em.F).
-               ! On a uniform-eta grid this cancels because rdzw(k-1)=rdzw(k).
-               ! On a stretched grid the vertical inflow terms below need an
-               ! rdzw(k)/rdzw(neighbor_k) ratio, analogous to the
-               ! msftx(local)/msftx(neighbor) ratio used in the horizontal
-               ! inflow above.  Tested clean to roundoff on a near-uniform
-               ! vertical grid (2026-05-10) — re-test on a stretched profile
-               ! before trusting vertical advection on a non-uniform mesh.
+               ! Incremental (delta) form.  Algebraically equivalent to the
+               ! extensive form
+               !   chem_dp = muold*LV_old*N_old - dt_eff*LV_old*OUT
+               !                                + dt_eff*sum_nb LV_nb*IN_nb
+               !   LV_new  = chem_dp / (munew*N_new)
+               ! but with the constant-LV cancellation done analytically:
+               !   LV_new = LV_old + dt_eff*sum_nb (LV_nb - LV_old)*IN_nb / (munew*N_new)
+               ! For a uniform LV every (LV_nb - LV_old) = 0, so LV_new = LV_old
+               ! to bit-exact roundoff regardless of how strong the local
+               ! divergence is or how small N_new gets — no cancellation
+               ! between large +/- pieces, no small-N_new amplification.
+               !
+               ! Each "IN_nb" is the same neighbor-inflow contribution that
+               ! appeared in the extensive form:
+               !   horizontal: mu_face_nb * flux_out_nb * msftx(local)/msftx(nb)
+               !   vertical  : mu_face_face * flux_out_top/bottom_at_nb
+               ! See module_advect_em.F for the msftx/rdzw normalization
+               ! semantics of flux_out_*.
+               delta_lv_dp =                                                                 &
+                   dt_eff_dp * mu_face_w                                                     &
+                     * ( dble(chem_old(i-1,k,j,ic2)) - dble(chem_old(i,k,j,ic2)) )           &
+                     * dble(grid%flux_out_east(i-1,k,j))                                     &
+                     * dble(grid%msftx(i,j)) / dble(grid%msftx(i-1,j))                       &
+                 + dt_eff_dp * mu_face_e                                                     &
+                     * ( dble(chem_old(i+1,k,j,ic2)) - dble(chem_old(i,k,j,ic2)) )           &
+                     * dble(grid%flux_out_west(i+1,k,j))                                     &
+                     * dble(grid%msftx(i,j)) / dble(grid%msftx(i+1,j))                       &
+                 + dt_eff_dp * mu_face_s                                                     &
+                     * ( dble(chem_old(i,k,j-1,ic2)) - dble(chem_old(i,k,j,ic2)) )           &
+                     * dble(grid%flux_out_north(i,k,j-1))                                    &
+                     * dble(grid%msftx(i,j)) / dble(grid%msftx(i,j-1))                       &
+                 + dt_eff_dp * mu_face_n                                                     &
+                     * ( dble(chem_old(i,k,j+1,ic2)) - dble(chem_old(i,k,j,ic2)) )           &
+                     * dble(grid%flux_out_south(i,k,j+1))                                    &
+                     * dble(grid%msftx(i,j)) / dble(grid%msftx(i,j+1))
+               ! NOTE: flux_out_top/bottom in advect_scalar_mono is normalized
+               ! by rdzw(k) of the *originating* cell.  On a uniform-eta grid
+               ! that cancels (rdzw(k-1)=rdzw(k)); on a stretched grid the
+               ! vertical inflow terms below need an rdzw(k)/rdzw(neighbor_k)
+               ! ratio analogous to the msftx ratio used horizontally.
+               ! Tested clean to roundoff on a near-uniform vertical grid
+               ! (2026-05-10) — re-test on a stretched profile before
+               ! trusting vertical advection on a non-uniform mesh.
                IF ( k > k_start ) THEN
-                 chem_dp = chem_dp + dt_eff_dp * mu_face_b * dble(chem_old(i,k-1,j,ic2))      &
-                                                          * dble(grid%flux_out_top(i,k-1,j))
+                 delta_lv_dp = delta_lv_dp + dt_eff_dp * mu_face_b                           &
+                       * ( dble(chem_old(i,k-1,j,ic2)) - dble(chem_old(i,k,j,ic2)) )         &
+                       * dble(grid%flux_out_top(i,k-1,j))
                ENDIF
                IF ( k < k_end ) THEN
-                 chem_dp = chem_dp + dt_eff_dp * mu_face_t * dble(chem_old(i,k+1,j,ic2))      &
-                                                          * dble(grid%flux_out_bottom(i,k+1,j))
+                 delta_lv_dp = delta_lv_dp + dt_eff_dp * mu_face_t                           &
+                       * ( dble(chem_old(i,k+1,j,ic2)) - dble(chem_old(i,k,j,ic2)) )         &
+                       * dble(grid%flux_out_bottom(i,k+1,j))
                ENDIF
 
-               ! Defensive: if chem_dp is non-finite (NaN/Inf) the cascade
+               ! Defensive: if delta_lv_dp is non-finite (NaN/Inf) the cascade
                ! has reached this cell from a corrupted neighbor.  Hold the
                ! previous value and print the neighbor LVs so we can trace
                ! where the corruption originated.
-               IF ( .NOT. (chem_dp == chem_dp) .OR. ABS(chem_dp) > 1.0d100 ) THEN
+               IF ( .NOT. (delta_lv_dp == delta_lv_dp) .OR. ABS(delta_lv_dp) > 1.0d100 ) THEN
                  chem(i,k,j,ic2) = chem_old(i,k,j,ic2)
                  WRITE(*,'(A,3I5,A,I3,A,ES15.6)')                            &
-                   'LATENT NEIGHBOR: bad chem_dp at (i,k,j)=', i, k, j,      &
-                   ' ic2=', ic2, ' chem_dp=', real(chem_dp)
+                   'LATENT NEIGHBOR: bad delta_lv_dp at (i,k,j)=', i, k, j,  &
+                   ' ic2=', ic2, ' delta_lv_dp=', real(delta_lv_dp)
                  WRITE(*,'(A,7ES15.6)')                                      &
                    '  LV_old(local,W,E,S,N,Below,Above)=',                   &
                    chem_old(i  ,k  ,j  ,ic2), chem_old(i-1,k  ,j  ,ic2),     &
@@ -2939,13 +2936,14 @@ end if
                    grid%flux_out_north(i,k,j-1), grid%flux_out_south(i,k,j+1),&
                    grid%flux_out_east(i,k,j),    grid%flux_out_west(i,k,j),  &
                    grid%flux_out_north(i,k,j),   grid%flux_out_south(i,k,j)
-               ! Recover intensive LV: divide by mu_new * N_new.
+               ! Recover intensive LV: LV_new = LV_old + delta / (mu_new * N_new).
                ! When N_new is too small to give a stable divide, hold the
                ! previous LV rather than zeroing.  Zeroing creates a sudden
                ! step in the LV field that propagates to neighbors on
                ! subsequent timesteps and eventually destabilizes the run.
                ELSE IF ( chem(i,k,j,num_3d_c) > 1.0e-20 ) THEN
-                 chem(i,k,j,ic2) = real(chem_dp / (munew_dp * dble(chem(i,k,j,num_3d_c))))
+                 chem(i,k,j,ic2) = chem_old(i,k,j,ic2)                                       &
+                                 + real(delta_lv_dp / (munew_dp * dble(chem(i,k,j,num_3d_c))))
                ELSE
                  chem(i,k,j,ic2) = chem_old(i,k,j,ic2)
                  WRITE(*,'(A,3I5,A,I3,A,3ES15.6)') &
@@ -2963,10 +2961,10 @@ end if
                  WRITE(*,'(A,3I5,A,I3,A,5ES15.6)')                           &
                    'LATENT WARN: extreme LV at (i,k,j)=', i, k, j,           &
                    ' ic2=', ic2,                                             &
-                   ' LV_new,LV_old,N_new,N_old,chem_dp=',                    &
+                   ' LV_new,LV_old,N_new,N_old,delta_lv_dp=',                &
                    chem(i,k,j,ic2), chem_old(i,k,j,ic2),                     &
                    chem(i,k,j,num_3d_c), chem_old(i,k,j,num_3d_c),           &
-                   real(chem_dp)
+                   real(delta_lv_dp)
                ENDIF
 
              ENDDO

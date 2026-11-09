@@ -78,7 +78,7 @@ CONTAINS
         get_last_gas = 0
      case ( CBMZ_CAM_MAM3_NOAQ, CBMZ_CAM_MAM3_AQ, CBMZ_CAM_MAM7_NOAQ, CBMZ_CAM_MAM7_AQ )
         get_last_gas = p_soag
-     case ( partmc_ml )
+     case ( partmc_ml, partmc_ml49 )
         get_last_gas = 0
      case default
         call wrf_error_fatal("get_last_gas: could not decipher chem_opt value")

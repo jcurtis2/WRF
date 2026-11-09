@@ -393,7 +393,7 @@ SUBROUTINE setup_gasprofile_maps(chem_opt, numgas)
 
  case (CO2_TRACER,GHG_TRACER)
      call wrf_debug("setup_profile_maps: nothing done for the GHG options")
- case (partmc_ml)
+ case (partmc_ml, partmc_ml49)
      call wrf_debug("PartMC-ML: nothing done")
   case default
      call wrf_error_fatal("setup_profile_maps: could not decipher chem_opt value")
@@ -760,7 +760,7 @@ SUBROUTINE input_chem_profile (si_grid)
       si_grid%chem(ims:ime,kms:kme,jms:jme,p_p25 ) = 1.
    ELSE IF ( si_grid%chem_opt==CO2_TRACER .OR. si_grid%chem_opt==GHG_TRACER ) THEN
        ! Do nothing, since for GHGs initialization is done in chemics_init.F
-   ELSE IF ( si_grid%chem_opt==partmc_ml) then
+   ELSE IF ( si_grid%chem_opt==partmc_ml .OR. si_grid%chem_opt==partmc_ml49 ) then
        ! Do nothing for now
    ELSE
       CALL make_chem_profile (ims, ime, jms, jme, kms, kme, num_chem, numgas, &

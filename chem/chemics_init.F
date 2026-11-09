@@ -262,8 +262,17 @@ call wrf_message("**************************************************************
      CASE(CB05_SORG_VBS_AQ_KPP)
         numgas_mam = numgas
         CALL wrf_debug(15,'calling CB05_SORG_VBS_AQ_KPP chemistry from chem_driver')
-     CASE(partmc_ml)
+     CASE(partmc_ml, partmc_ml49)
         CALL wrf_debug(15,'calling partmc_ml chemistry')
+        ! The emitted latent vector must be as long as the advected one.  A
+        ! mismatch would not fail: chem_opt=901 with emiss_opt=21 updates ntot
+        ! but never mixes latents 10-49, and chem_opt=900 with emiss_opt=22
+        ! asks wrfchemi for 40 fields it does not have.
+        IF ( ( config_flags%chem_opt == partmc_ml   .AND. config_flags%emiss_opt == epartml49 ) .OR. &
+             ( config_flags%chem_opt == partmc_ml49 .AND. config_flags%emiss_opt == epartml   ) ) THEN
+           CALL wrf_error_fatal('chemics_init: PartMC-ML latent count mismatch; use chem_opt=900 '// &
+                'with emiss_opt=21 (9 latents + ntot) or chem_opt=901 with emiss_opt=22 (49 latents + ntot)')
+        ENDIF
    END SELECT chem_select
 
    if ( config_flags%dust_opt == 1 ) then

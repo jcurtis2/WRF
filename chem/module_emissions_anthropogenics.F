@@ -61,6 +61,10 @@ CONTAINS
     integer :: i,j,k
     real :: conv_rho(its:ite)
     real :: conv_rho_aer(its:ite)
+    real :: dN_emis, N_old, N_new
+    ! PartMC-ML latent pairs (chem index, emis_ant index); unused slots stay 1
+    integer, parameter :: max_ltnt = 49
+    integer :: iv, ltnt_idx(max_ltnt), e_ltnt_idx(max_ltnt)
 
     logical :: is_moz_chm
     character(len=256) :: msg
@@ -245,47 +249,56 @@ is_mozart:if( is_moz_chm ) then
             endif
           endif is_mozart
           !
-          ! PartMC ML latent variables and ntot emissions (emiss_opt == 21)
-          ! TODO: Figure out proper conversion factors. Latent variables represent size distribution
-          !       and should likely be scaled by ntot (total number concentration). Currently using
-          !       conv_rho_aer for all variables - needs verification.
+          ! PartMC ML latent variables and ntot emissions (emiss_opt == 21 for
+          ! 9 latents with chem_opt=900; emiss_opt == 22 for 49 latents with
+          ! chem_opt=901).
+          ! Emission latent variables are stored INTENSIVELY (per particle), the same
+          ! convention as the state ltnt_var* and as the number-weighted advection
+          ! remap in dyn_em/solve_em.F: storage is intensive, the extensive product
+          ! ltnt*N is formed inside the operator and never leaves it. e_ntot is the
+          ! number flux; e_ltnt_var* is the dimensionless latent vector of the emitted
+          ! population. Mix existing and emitted populations by number:
+          !   ltnt_new = (N_old * ltnt_old + dN_emis * e_ltnt) / (N_old + dN_emis)
+          ! Where nothing is emitted dN_emis = 0, so e_ltnt cannot contribute and its
+          ! stored value is irrelevant; the dN_emis > 0 guard below makes that case a
+          ! bitwise no-op rather than a (N*l)/N round trip, which is not exact in
+          ! single precision and would otherwise perturb every non-emitting column at
+          ! roundoff level on every step. ntot is extensive and is updated additively.
+          ! Multiple emission sectors are merged at build time: the number-weighted
+          ! average is exactly equivalent to applying the sectors sequentially here.
           !
-          if( config_flags%emiss_opt == 21 ) then
-            print*, 'Adding PartMC ML emissions for latent variables and ntot'
-            if( p_e_ltnt_var1 >= param_first_scalar .and. p_ltnt_var1 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var1) = chem(its:ite,k,j,p_ltnt_var1) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var1)
-            endif
-            if( p_e_ltnt_var2 >= param_first_scalar .and. p_ltnt_var2 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var2) = chem(its:ite,k,j,p_ltnt_var2) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var2)
-            endif
-            if( p_e_ltnt_var3 >= param_first_scalar .and. p_ltnt_var3 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var3) = chem(its:ite,k,j,p_ltnt_var3) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var3)
-            endif
-            if( p_e_ltnt_var4 >= param_first_scalar .and. p_ltnt_var4 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var4) = chem(its:ite,k,j,p_ltnt_var4) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var4)
-            endif
-            if( p_e_ltnt_var5 >= param_first_scalar .and. p_ltnt_var5 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var5) = chem(its:ite,k,j,p_ltnt_var5) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var5)
-            endif
-            if( p_e_ltnt_var6 >= param_first_scalar .and. p_ltnt_var6 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var6) = chem(its:ite,k,j,p_ltnt_var6) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var6)
-            endif
-            if( p_e_ltnt_var7 >= param_first_scalar .and. p_ltnt_var7 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var7) = chem(its:ite,k,j,p_ltnt_var7) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var7)
-            endif
-            if( p_e_ltnt_var8 >= param_first_scalar .and. p_ltnt_var8 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var8) = chem(its:ite,k,j,p_ltnt_var8) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var8)
-            endif
-            if( p_e_ltnt_var9 >= param_first_scalar .and. p_ltnt_var9 >= param_first_scalar ) then
-              chem(its:ite,k,j,p_ltnt_var9) = chem(its:ite,k,j,p_ltnt_var9) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ltnt_var9)
-            endif
-            if( p_e_ntot >= param_first_scalar .and. p_ntot >= param_first_scalar ) then
-              if (maxval(emis_ant(its:ite,1,j,p_e_ntot)) > 0.0) then
-              print*, 'adding number', p_ntot, p_e_ntot, &
-                 maxval(emis_ant(its:ite,1,j,p_e_ntot))
-              end if
-              chem(its:ite,k,j,p_ntot) = chem(its:ite,k,j,p_ntot) + conv_rho_aer(its:ite)*emis_ant(its:ite,k,j,p_e_ntot)
-            endif
+          ! Latents are paired with their emission field by name through ltnt_idx /
+          ! e_ltnt_idx; a slot whose variable is not in the active package has index 1
+          ! (< param_first_scalar) and is skipped, so the same loop serves both sizes.
+          !
+          if( ( config_flags%emiss_opt == epartml .or. config_flags%emiss_opt == epartml49 ) .and. &
+              p_e_ntot >= param_first_scalar .and. p_ntot >= param_first_scalar ) then
+            ltnt_idx = (/ p_ltnt_var1, p_ltnt_var2, p_ltnt_var3, p_ltnt_var4, p_ltnt_var5, p_ltnt_var6, p_ltnt_var7, &
+                          p_ltnt_var8, p_ltnt_var9, p_ltnt_var10, p_ltnt_var11, p_ltnt_var12, p_ltnt_var13, p_ltnt_var14, &
+                          p_ltnt_var15, p_ltnt_var16, p_ltnt_var17, p_ltnt_var18, p_ltnt_var19, p_ltnt_var20, p_ltnt_var21, &
+                          p_ltnt_var22, p_ltnt_var23, p_ltnt_var24, p_ltnt_var25, p_ltnt_var26, p_ltnt_var27, p_ltnt_var28, &
+                          p_ltnt_var29, p_ltnt_var30, p_ltnt_var31, p_ltnt_var32, p_ltnt_var33, p_ltnt_var34, p_ltnt_var35, &
+                          p_ltnt_var36, p_ltnt_var37, p_ltnt_var38, p_ltnt_var39, p_ltnt_var40, p_ltnt_var41, p_ltnt_var42, &
+                          p_ltnt_var43, p_ltnt_var44, p_ltnt_var45, p_ltnt_var46, p_ltnt_var47, p_ltnt_var48, p_ltnt_var49 /)
+            e_ltnt_idx = (/ p_e_ltnt_var1, p_e_ltnt_var2, p_e_ltnt_var3, p_e_ltnt_var4, p_e_ltnt_var5, p_e_ltnt_var6, p_e_ltnt_var7, &
+                            p_e_ltnt_var8, p_e_ltnt_var9, p_e_ltnt_var10, p_e_ltnt_var11, p_e_ltnt_var12, p_e_ltnt_var13, p_e_ltnt_var14, &
+                            p_e_ltnt_var15, p_e_ltnt_var16, p_e_ltnt_var17, p_e_ltnt_var18, p_e_ltnt_var19, p_e_ltnt_var20, p_e_ltnt_var21, &
+                            p_e_ltnt_var22, p_e_ltnt_var23, p_e_ltnt_var24, p_e_ltnt_var25, p_e_ltnt_var26, p_e_ltnt_var27, p_e_ltnt_var28, &
+                            p_e_ltnt_var29, p_e_ltnt_var30, p_e_ltnt_var31, p_e_ltnt_var32, p_e_ltnt_var33, p_e_ltnt_var34, p_e_ltnt_var35, &
+                            p_e_ltnt_var36, p_e_ltnt_var37, p_e_ltnt_var38, p_e_ltnt_var39, p_e_ltnt_var40, p_e_ltnt_var41, p_e_ltnt_var42, &
+                            p_e_ltnt_var43, p_e_ltnt_var44, p_e_ltnt_var45, p_e_ltnt_var46, p_e_ltnt_var47, p_e_ltnt_var48, p_e_ltnt_var49 /)
+            do i = its, ite
+              dN_emis = conv_rho_aer(i) * emis_ant(i,k,j,p_e_ntot)
+              N_old   = chem(i,k,j,p_ntot)
+              N_new   = N_old + dN_emis
+              if( dN_emis > 0.0 .and. N_new > 0.0 ) then
+                do iv = 1, max_ltnt
+                  if( e_ltnt_idx(iv) >= param_first_scalar .and. ltnt_idx(iv) >= param_first_scalar ) &
+                    chem(i,k,j,ltnt_idx(iv)) = (N_old*chem(i,k,j,ltnt_idx(iv)) + dN_emis*emis_ant(i,k,j,e_ltnt_idx(iv))) / N_new
+                end do
+              endif
+              chem(i,k,j,p_ntot) = N_new
+            end do
           endif
         END DO k_loop
       END DO                                                          

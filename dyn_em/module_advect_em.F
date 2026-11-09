@@ -10383,7 +10383,7 @@ SUBROUTINE advect_scalar_mono   ( field, field_old, tendency,    &
      fqy  = 0.0
      fqyl = 0.0
    END IF
-   IF (.TRUE.) THEN
+   IF (.FALSE.) THEN
      fqz  = 0.0
      fqzl = 0.0
    END IF

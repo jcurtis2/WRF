@@ -3462,6 +3462,7 @@ halo      HALO_EM_MOIST_E_5 dyn_em 48:moist
 halo      HALO_EM_MOIST_E_7 dyn_em 80:moist
 halo      HALO_CUP_G3_IN dyn_em 24:RTHFTEN,RQVFTEN,w_2,t_phy
 halo      HALO_CUP_G3_OUT dyn_em 48:cugd_tten,cugd_qvten,cugd_ttens,cugd_qvtens,raincv
+halo      HALO_EM_FLUX_OUT dyn_em 24:flux_out_east,flux_out_west,flux_out_north,flux_out_south,flux_out_top,flux_out_bottom
 halo      HALO_EM_CHEM_E_3 dyn_em 24:chem
 halo      HALO_EM_CHEM_E_5 dyn_em 48:chem
 halo      HALO_EM_CHEM_E_7 dyn_em 80:chem
