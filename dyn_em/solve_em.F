@@ -2953,20 +2953,6 @@ end if
                    chem_old(i,k,j,num_3d_c), chem_old(i,k,j,ic2)
                ENDIF
 
-               ! Catch LV values that are far from the expected range.
-               ! Initial uniform value is around -0.131; flag anything that
-               ! crosses zero or exceeds an order of magnitude in size.
-               IF ( ABS(chem(i,k,j,ic2)) < 1.0e-3 .OR.                      &
-                    ABS(chem(i,k,j,ic2)) > 10.0 ) THEN
-                 WRITE(*,'(A,3I5,A,I3,A,5ES15.6)')                           &
-                   'LATENT WARN: extreme LV at (i,k,j)=', i, k, j,           &
-                   ' ic2=', ic2,                                             &
-                   ' LV_new,LV_old,N_new,N_old,delta_lv_dp=',                &
-                   chem(i,k,j,ic2), chem_old(i,k,j,ic2),                     &
-                   chem(i,k,j,num_3d_c), chem_old(i,k,j,num_3d_c),           &
-                   real(delta_lv_dp)
-               ENDIF
-
              ENDDO
              ENDDO
              ENDDO
